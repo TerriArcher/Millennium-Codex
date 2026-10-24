@@ -36,13 +36,38 @@ function getSuperTypeQuery(superType: string): string {
   }
 }
 
+// Exclude Token and Skill cards from ever being drawn as random cards
+export function isPlayableCard(card: any): boolean {
+  if (!card) return false;
+  const typeLower = String(card.type || '').toLowerCase();
+  const frameLower = String(card.frameType || '').toLowerCase();
+  const humanTypeLower = String(card.humanReadableCardType || '').toLowerCase();
+
+  if (
+    typeLower.includes('token') ||
+    typeLower.includes('skill') ||
+    frameLower === 'token' ||
+    frameLower === 'skill' ||
+    humanTypeLower.includes('token') ||
+    humanTypeLower.includes('skill')
+  ) {
+    return false;
+  }
+  return true;
+}
+
 // Extract cards whether API returns { data: [...] }, array, or single card object
 function extractCardsFromResult(json: any): YugiohCard[] {
   if (!json) return [];
-  if (Array.isArray(json.data) && json.data.length > 0) return json.data;
-  if (Array.isArray(json) && json.length > 0) return json;
-  if (json.id && json.name) return [json];
-  return [];
+  let rawList: YugiohCard[] = [];
+  if (Array.isArray(json.data) && json.data.length > 0) {
+    rawList = json.data;
+  } else if (Array.isArray(json) && json.length > 0) {
+    rawList = json;
+  } else if (json.id && json.name) {
+    rawList = [json];
+  }
+  return rawList.filter(isPlayableCard);
 }
 
 // Normalize card fields to guarantee type safety and direct links
@@ -118,6 +143,7 @@ export function normalizeCard(rawCard: any): YugiohCard {
 // Filter local fallback cards when offline
 export function filterFallbackCards(filters: CardFilterState, excludeId?: number): YugiohCard[] {
   const filtered = FALLBACK_CARDS.filter((card) => {
+    if (!isPlayableCard(card)) return false;
     if (filters.attribute && card.attribute?.toUpperCase() !== String(filters.attribute).toUpperCase()) {
       return false;
     }
@@ -232,7 +258,7 @@ export async function fetchRandomCardFromApi(
     try {
       const timestamp = Date.now();
       const response = await fetch(
-        `${YGOPRODECK_API_URL}?num=6&offset=0&sort=random&cachebust=${timestamp}`,
+        `${YGOPRODECK_API_URL}?num=15&offset=0&sort=random&cachebust=${timestamp}`,
         {
           headers: {
             Accept: 'application/json'
