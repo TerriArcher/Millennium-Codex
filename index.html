@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Millennium Codex - Yu-Gi-Oh! Random Card & Meta Hub</title>
+    <meta name="description" content="Full-stack Yu-Gi-Oh! card explorer and resource hub featuring random card generation powered by YGOPRODeck with interactive stat exploration, and links to top competitive meta sites." />
+    <meta property="og:title" content="Millennium Codex - Yu-Gi-Oh! Random Card & Meta Hub" />
+    <meta property="og:description" content="Full-stack Yu-Gi-Oh! card explorer and resource hub featuring random card generation powered by YGOPRODeck with interactive stat exploration, and links to top competitive meta sites." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400..700;1,9..40,400..700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <script>
+      // Environment constraint: HMR is disabled in AI Studio preview. Ignore WebSocket errors.
+      window.addEventListener('error', function(e) {
+        if (e && (e.message && (e.message.indexOf('WebSocket') !== -1 || e.message.indexOf('createWebSocketModuleRunnerTransport') !== -1) || e.filename && e.filename.indexOf('@vite/client') !== -1)) {
+          e.stopImmediatePropagation();
+          e.preventDefault();
+        }
+      }, true);
+      window.addEventListener('unhandledrejection', function(e) {
+        var str = String(e && e.reason && (e.reason.message || e.reason.stack || e.reason) || '');
+        if (str.indexOf('WebSocket') !== -1 || str.indexOf('createWebSocketModuleRunnerTransport') !== -1 || str.indexOf('@vite/client') !== -1) {
+          e.stopImmediatePropagation();
+          e.preventDefault();
+        }
+      }, true);
+    </script>
+  </head>
+  <body class="bg-slate-950 text-slate-100 min-h-screen selection:bg-amber-500/20 selection:text-amber-300 font-sans antialiased">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,6 @@
+{
+  "name": "Millennium Codex - Yu-Gi-Oh! Random Card & Meta Hub",
+  "description": "Full-stack Yu-Gi-Oh! card explorer and resource hub featuring random card generation powered by YGOPRODeck with interactive stat exploration, and links to top competitive meta sites.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
