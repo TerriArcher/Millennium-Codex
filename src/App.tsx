@@ -11,6 +11,7 @@ import { ResourcesPage } from './pages/ResourcesPage';
 import { HistoryDrawer } from './components/HistoryDrawer';
 import { YugiohCard } from './types/card';
 import { FALLBACK_CARDS, INITIAL_ACE_CARDS } from './data/fallbackCards';
+import { fetchRandomCardFromApi } from './services/ygoprodeckApi';
 
 function AppContent() {
   const [currentCard, setCurrentCard] = useState<YugiohCard>(() => {
@@ -35,24 +36,10 @@ function AppContent() {
   const handleQuickDraw = async () => {
     setIsQuickDrawing(true);
     try {
-      const url = currentCard?.id ? `/api/cards/random?excludeId=${currentCard.id}` : '/api/cards/random';
-      const res = await fetch(url);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.card) {
-          setCurrentCard(data.card);
-          handleCardDrawn(data.card);
-          navigate('/');
-        }
-      } else {
-        // Fallback pick excluding current card
-        let pool = FALLBACK_CARDS;
-        if (currentCard && pool.length > 1) {
-          pool = pool.filter((c) => c.id !== currentCard.id);
-        }
-        const randomCard = pool[Math.floor(Math.random() * pool.length)];
-        setCurrentCard(randomCard);
-        handleCardDrawn(randomCard);
+      const data = await fetchRandomCardFromApi({}, currentCard?.id);
+      if (data.card) {
+        setCurrentCard(data.card);
+        handleCardDrawn(data.card);
         navigate('/');
       }
     } catch (err) {

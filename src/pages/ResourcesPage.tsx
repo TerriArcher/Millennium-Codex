@@ -20,45 +20,22 @@ export const ResourcesPage: React.FC = () => {
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
 
-  // Load from Express API endpoint /api/resources if available
   useEffect(() => {
-    const fetchResources = async () => {
-      setIsLoading(true);
-      try {
-        const params = new URLSearchParams();
-        if (activeCategory !== 'all') params.append('category', activeCategory);
-        if (searchQuery) params.append('q', searchQuery);
-
-        const res = await fetch(`/api/resources?${params.toString()}`);
-        if (res.ok) {
-          const data = await res.json();
-          setResources(data.resources || META_RESOURCES);
-        }
-      } catch (err) {
-        console.warn('Using client-side fallback resources:', err);
-        // Client-side filtering
-        let list = [...META_RESOURCES];
-        if (activeCategory !== 'all') {
-          list = list.filter((r) => r.category === activeCategory);
-        }
-        if (searchQuery) {
-          const q = searchQuery.toLowerCase();
-          list = list.filter(
-            (r) =>
-              r.title.toLowerCase().includes(q) ||
-              r.description.toLowerCase().includes(q) ||
-              r.highlights.some((h) => h.toLowerCase().includes(q))
-          );
-        }
-        setResources(list);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchResources();
+    let list = [...META_RESOURCES];
+    if (activeCategory !== 'all') {
+      list = list.filter((r) => r.category === activeCategory);
+    }
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(
+        (r) =>
+          r.title.toLowerCase().includes(q) ||
+          r.description.toLowerCase().includes(q) ||
+          r.highlights.some((h) => h.toLowerCase().includes(q))
+      );
+    }
+    setResources(list);
   }, [activeCategory, searchQuery]);
 
   const handleCopyUrl = (url: string, id: string) => {

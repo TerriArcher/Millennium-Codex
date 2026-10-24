@@ -3,7 +3,8 @@ import { YugiohCard, CardFilterState } from '../types/card';
 import { FilterBar } from '../components/FilterBar';
 import { CardDisplay } from '../components/CardDisplay';
 import { FALLBACK_CARDS, INITIAL_ACE_CARDS } from '../data/fallbackCards';
-import { AlertCircle, Shuffle, Compass } from 'lucide-react';
+import { fetchRandomCardFromApi } from '../services/ygoprodeckApi';
+import { AlertCircle, Compass } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 interface CardRandomizerPageProps {
@@ -22,64 +23,24 @@ export const CardRandomizerPage: React.FC<CardRandomizerPageProps> = ({
   const [totalMatches, setTotalMatches] = useState<number | undefined>(undefined);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Function to fetch a random card from Express backend with non-duplication guarantee
+  // Fetch a random card directly from the YGOPRODeck API with non-duplication guarantee
   const fetchRandomCard = async (appliedFilters: CardFilterState = filters) => {
     setIsLoading(true);
     setErrorMsg(null);
 
     try {
-      const params = new URLSearchParams();
-      if (appliedFilters.type) params.append('type', appliedFilters.type);
-      if (appliedFilters.superType) params.append('superType', appliedFilters.superType);
-      if (appliedFilters.attribute) params.append('attribute', appliedFilters.attribute);
-      if (appliedFilters.level !== undefined && appliedFilters.level !== '') {
-        params.append('level', String(appliedFilters.level));
-      }
-      if (appliedFilters.scale !== undefined && appliedFilters.scale !== '') {
-        params.append('scale', String(appliedFilters.scale));
-      }
-      if (appliedFilters.race) params.append('race', appliedFilters.race);
-      if (appliedFilters.atk !== undefined && appliedFilters.atk !== '') {
-        params.append('atk', String(appliedFilters.atk));
-      }
-      if (appliedFilters.def !== undefined && appliedFilters.def !== '') {
-        params.append('def', String(appliedFilters.def));
-      }
-      if (appliedFilters.archetype) params.append('archetype', appliedFilters.archetype);
-      if (appliedFilters.keyword) params.append('fname', appliedFilters.keyword);
+      const data = await fetchRandomCardFromApi(appliedFilters, currentCard?.id);
 
-      // Rule: The "Draw Random Card" button should never display the most recent card
-      if (currentCard?.id) {
-        params.append('excludeId', String(currentCard.id));
-      }
-
-      const url = `/api/cards/random${params.toString() ? `?${params.toString()}` : ''}`;
-      const response = await fetch(url);
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          setErrorMsg('No card matching this exact criteria was found. Try loosening the filters.');
-          setIsLoading(false);
-          return;
-        }
-        throw new Error(`Failed to load card: HTTP ${response.status}`);
-      }
-
-      const data = await response.json();
       if (data.card) {
         // Double check client-side: never display the same card if another can be drawn
         if (currentCard && data.card.id === currentCard.id && data.totalMatches > 1) {
-          // Re-roll once to ensure a new card is drawn
-          const retryRes = await fetch(url);
-          if (retryRes.ok) {
-            const retryData = await retryRes.json();
-            if (retryData.card) {
-              setCurrentCard(retryData.card);
-              setTotalMatches(retryData.totalMatches);
-              onCardDrawn(retryData.card);
-              setIsLoading(false);
-              return;
-            }
+          const retryData = await fetchRandomCardFromApi(appliedFilters, currentCard.id);
+          if (retryData.card) {
+            setCurrentCard(retryData.card);
+            setTotalMatches(retryData.totalMatches);
+            onCardDrawn(retryData.card);
+            setIsLoading(false);
+            return;
           }
         }
 
@@ -88,7 +49,11 @@ export const CardRandomizerPage: React.FC<CardRandomizerPageProps> = ({
         onCardDrawn(data.card);
       }
     } catch (err: any) {
-      console.warn('Backend fetch error, using local seed fallback:', err);
+      if (err?.status === 404) {
+        setErrorMsg('No card matching this exact criteria was found. Try loosening the filters.');
+        return;
+      }
+      console.warn('API fetch error, using local seed fallback:', err);
       // Select non-recent card from fallback
       let pool = FALLBACK_CARDS;
       if (currentCard && pool.length > 1) {
