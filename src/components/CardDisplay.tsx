@@ -1,5 +1,9 @@
 import React, { useState } from 'react';
 import { YugiohCard } from '../types/card';
+import { useAppDispatch, useAppSelector } from '../store/hooks';
+import { toggleFilterField } from '../store/slices/filtersSlice';
+import { toggleFavorite } from '../store/slices/historySlice';
+import { HighlightedCardText, KeywordDefinition } from '../utils/cardTextParser';
 import {
   Sparkles,
   Copy,
@@ -11,7 +15,8 @@ import {
   Layers,
   Maximize2,
   Bookmark,
-  Tag
+  Tag,
+  Heart
 } from 'lucide-react';
 
 interface CardDisplayProps {
@@ -156,9 +161,15 @@ export const CardDisplay: React.FC<CardDisplayProps> = ({
   onExploreStat,
   isLoading = false
 }) => {
+  const dispatch = useAppDispatch();
+  const activeFilters = useAppSelector((state) => state.filters);
+  const favorites = useAppSelector((state) => state.history.favorites);
+  const isFavorite = favorites.includes(card.id);
+
   const [copied, setCopied] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [showSets, setShowSets] = useState(false);
+  const [keywordFeedback, setKeywordFeedback] = useState<string | null>(null);
 
   const safeType = card.type || (card.atk !== undefined || card.def !== undefined ? 'Effect Monster' : 'Card');
   const typeStr = safeType.toLowerCase();
@@ -184,21 +195,51 @@ export const CardDisplay: React.FC<CardDisplayProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleToggleFav = () => {
+    dispatch(toggleFavorite({ id: card.id, card }));
+  };
+
+  const handleSelectKeyword = (def: KeywordDefinition) => {
+    dispatch(
+      toggleFilterField({
+        key: def.filterKey,
+        value: def.filterValue,
+        typeOverride: def.typeOverride
+      })
+    );
+
+    const isNowActive =
+      activeFilters[def.filterKey] !== undefined &&
+      String(activeFilters[def.filterKey]).toLowerCase() === String(def.filterValue).toLowerCase();
+
+    const msg = isNowActive
+      ? `Removed ${def.displayLabel} from filter`
+      : `Added ${def.displayLabel} to filter`;
+    setKeywordFeedback(msg);
+    setTimeout(() => setKeywordFeedback(null), 2500);
+  };
+
   return (
     <div className="w-full max-w-2xl mx-auto flex flex-col items-center">
-      {/* 1. TOP: Card Image with Hover Zoom */}
-      <div className="relative group/card-img mb-6 flex flex-col items-center">
-        <div className="relative rounded-2xl overflow-hidden shadow-2xl shadow-black/80 border border-slate-700/70 bg-slate-900 transition-all duration-300">
+      {/* 1. TOP: Card Image with Glowing Border & Click to Open in New Tab */}
+      <div className="relative group/card-img mb-6 flex flex-col items-center max-w-full">
+        <a
+          href={cardImage}
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Click to open card image in a new tab"
+          className="relative block rounded-2xl overflow-hidden shadow-2xl shadow-black/80 border-2 border-slate-700/70 bg-slate-900 group-hover/card-img:border-amber-400 group-hover/card-img:shadow-[0_0_30px_rgba(251,191,36,0.45)] group-hover/card-img:ring-2 group-hover/card-img:ring-amber-400/30 transition-all duration-300 cursor-pointer max-w-full"
+        >
           {!imageError ? (
             <img
               src={cardImage}
               alt={card.name}
               referrerPolicy="no-referrer"
               onError={() => setImageError(true)}
-              className="w-72 sm:w-80 md:w-88 h-auto object-contain transition-transform duration-300 ease-out group-hover/card-img:scale-108 cursor-zoom-in drop-shadow-md select-none"
+              className="w-64 xs:w-72 sm:w-80 md:w-88 max-w-[calc(100vw-2.5rem)] h-auto object-contain drop-shadow-md select-none transition-none"
             />
           ) : (
-            <div className="w-72 sm:w-80 h-112 bg-gradient-to-b from-slate-900 via-slate-800 to-slate-950 p-6 flex flex-col items-center justify-between text-center border-2 border-dashed border-slate-700">
+            <div className="w-64 xs:w-72 sm:w-80 h-112 max-w-[calc(100vw-2.5rem)] bg-gradient-to-b from-slate-900 via-slate-800 to-slate-950 p-6 flex flex-col items-center justify-between text-center border-2 border-dashed border-slate-700">
               <div className="text-xs uppercase tracking-wider text-amber-400 font-semibold">
                 {frame.label}
               </div>
@@ -214,16 +255,16 @@ export const CardDisplay: React.FC<CardDisplayProps> = ({
             </div>
           )}
 
-          {/* Hover zoom hint */}
-          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-slate-950/80 backdrop-blur-sm border border-slate-700/60 rounded px-2.5 py-1 text-[11px] text-slate-300 pointer-events-none opacity-0 group-hover/card-img:opacity-100 transition-opacity flex items-center gap-1.5 whitespace-nowrap shadow-md">
-            <Maximize2 className="w-3 h-3 text-amber-400" />
-            <span>Hover zoomed · Card #{card.id}</span>
+          {/* Tooltip advising user that clicking opens image in new tab */}
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-slate-950/90 backdrop-blur-md border border-amber-500/50 rounded-lg px-3 py-1.5 text-xs font-semibold text-amber-300 pointer-events-none opacity-0 group-hover/card-img:opacity-100 transition-all duration-200 transform translate-y-1 group-hover/card-img:translate-y-0 flex items-center gap-1.5 whitespace-nowrap shadow-xl shadow-black/80">
+            <ExternalLink className="w-3.5 h-3.5 text-amber-400" />
+            <span>Click to open in new tab</span>
           </div>
-        </div>
+        </a>
       </div>
 
       {/* 2. UNDERNEATH: Card Text and Details Box */}
-      <div className="w-full bg-slate-900/90 border border-slate-800 rounded-2xl p-6 sm:p-7 shadow-xl shadow-slate-950/60 backdrop-blur-sm">
+      <div className="w-full max-w-full bg-slate-900/90 border border-slate-800 rounded-2xl p-4 sm:p-7 shadow-xl shadow-slate-950/60 backdrop-blur-sm">
         {/* Card Name Header & Actions */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-5 border-b border-slate-800">
           <div className="space-y-1.5 min-w-0 flex-1">
@@ -283,6 +324,18 @@ export const CardDisplay: React.FC<CardDisplayProps> = ({
                 ) : (
                   <Copy className="w-3.5 h-3.5" />
                 )}
+              </button>
+              <button
+                onClick={handleToggleFav}
+                className={`p-1.5 rounded-md transition-colors cursor-pointer shrink-0 border border-transparent hover:border-slate-700/60 ${
+                  isFavorite
+                    ? 'text-red-400 hover:text-red-300 bg-red-950/40'
+                    : 'text-slate-400 hover:text-red-400 hover:bg-slate-800/80'
+                }`}
+                title={isFavorite ? "Remove from Favorites" : "Save to Favorites"}
+                aria-label={isFavorite ? "Remove from Favorites" : "Save to Favorites"}
+              >
+                <Heart className={`w-3.5 h-3.5 ${isFavorite ? 'fill-red-400' : ''}`} />
               </button>
               {copied && (
                 <span className="text-[11px] text-emerald-400 font-medium">
@@ -572,18 +625,32 @@ export const CardDisplay: React.FC<CardDisplayProps> = ({
           </div>
         )}
 
-        {/* CARD TEXT / EFFECT BOX */}
+        {/* CARD TEXT / EFFECT BOX WITH INTERACTIVE HIGHLIGHTED KEYWORDS */}
         <div className="space-y-2">
-          <div className="text-xs uppercase tracking-wider text-slate-400 font-semibold flex items-center gap-1.5">
-            <span>
+          <div className="flex items-center justify-between gap-2 flex-wrap text-xs">
+            <span className="uppercase tracking-wider text-slate-400 font-semibold">
               {isMonster
                 ? `[ ${card.race || 'Card'} / ${safeType.replace(' Monster', '')} ]`
                 : `[ ${typeStr.includes('trap') ? 'Trap Card' : 'Spell Card'} / ${card.race === 'Quick-Play' ? 'Quick' : (card.race || 'Normal')} ]`}
             </span>
+
+            {keywordFeedback ? (
+              <span className="text-amber-300 font-medium animate-pulse text-[11px] bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30">
+                {keywordFeedback}
+              </span>
+            ) : (
+              <span className="text-[10px] text-slate-400 italic">
+                Tip: Click highlighted keywords below to filter directly
+              </span>
+            )}
           </div>
 
           <div className="p-4 bg-slate-950/80 border border-slate-800/80 rounded-xl font-sans text-sm sm:text-base text-slate-200 leading-relaxed whitespace-pre-line shadow-inner max-h-72 overflow-y-auto">
-            {card.desc}
+            <HighlightedCardText
+              text={card.desc}
+              activeFilters={activeFilters}
+              onSelectKeyword={handleSelectKeyword}
+            />
           </div>
         </div>
 

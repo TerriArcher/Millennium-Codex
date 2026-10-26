@@ -11,11 +11,11 @@ interface FilterBarProps {
   totalMatches?: number;
 }
 
-const ATTRIBUTES = ['DARK', 'LIGHT', 'EARTH', 'WATER', 'FIRE', 'WIND', 'DIVINE'];
-const LEVELS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
-const SCALES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
-const SUPER_TYPES = ['Link', 'XYZ', 'Synchro', 'Ritual', 'Fusion', 'Pendulum', 'Spirit', 'Toon', 'Gemini', 'Union'];
-const MONSTER_RACES = [
+export const ATTRIBUTES = ['DARK', 'LIGHT', 'EARTH', 'WATER', 'FIRE', 'WIND', 'DIVINE'];
+export const LEVELS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+export const SCALES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
+export const SUPER_TYPES = ['Link', 'XYZ', 'Synchro', 'Ritual', 'Fusion', 'Pendulum', 'Spirit', 'Toon', 'Gemini', 'Union', 'Tuner'];
+export const MONSTER_RACES = [
   'Dragon',
   'Spellcaster',
   'Warrior',
@@ -42,9 +42,9 @@ const MONSTER_RACES = [
   'Thunder',
   'Divine-Beast'
 ];
-const SPELL_SUBTYPES = ['Quick', 'Field', 'Continuous', 'Equip', 'Ritual', 'Normal'];
-const TRAP_SUBTYPES = ['Counter', 'Continuous', 'Normal'];
-const ALL_SUBTYPES = ['Quick', 'Field', 'Continuous', 'Counter', 'Ritual', 'Equip', 'Normal'];
+export const SPELL_SUBTYPES = ['Quick', 'Field', 'Continuous', 'Equip', 'Ritual', 'Normal'];
+export const TRAP_SUBTYPES = ['Counter', 'Continuous', 'Normal'];
+export const ALL_SUBTYPES = ['Quick', 'Field', 'Continuous', 'Counter', 'Ritual', 'Equip', 'Normal'];
 
 export const FilterBar: React.FC<FilterBarProps> = ({
   filters,
@@ -157,7 +157,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
         </div>
 
         {/* Secondary controls and Main Draw CTA */}
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
           <button
             onClick={() => setShowAdvanced(!showAdvanced)}
             className={`px-3 py-2 text-xs font-medium rounded-xl border transition-colors flex items-center gap-1.5 cursor-pointer ${
@@ -173,23 +173,35 @@ export const FilterBar: React.FC<FilterBarProps> = ({
             )}
           </button>
 
-          {hasAnyFilter && (
-            <button
-              onClick={onResetFilters}
-              title="Reset all filters"
-              className="p-2 text-xs text-slate-400 hover:text-white bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-xl transition-colors cursor-pointer"
-            >
-              <RotateCcw className="w-4 h-4" />
-            </button>
-          )}
-
+          {/* Main Draw Action - Retains and checks filters */}
           <button
             onClick={onDrawRandom}
             disabled={isLoading}
             className="flex-1 sm:flex-none px-5 py-2.5 text-sm font-bold text-slate-950 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 active:scale-98 rounded-xl shadow-md shadow-amber-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 whitespace-nowrap"
+            title={hasAnyFilter ? 'Draw a random card matching active filters' : 'Draw random card'}
           >
             <Sparkles className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-            <span>{isLoading ? 'Drawing Card...' : 'Draw Random Card'}</span>
+            <span>{isLoading ? 'Drawing...' : 'Draw Card'}</span>
+            {hasAnyFilter && (
+              <span className="px-1.5 py-0.5 text-[10px] font-extrabold bg-slate-950/25 rounded-md">
+                Active
+              </span>
+            )}
+          </button>
+
+          {/* Clear all filters button positioned directly next to Draw Card */}
+          <button
+            onClick={onResetFilters}
+            disabled={!hasAnyFilter}
+            className={`px-3.5 py-2.5 text-xs font-semibold rounded-xl border transition-all flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer ${
+              hasAnyFilter
+                ? 'bg-slate-800/90 hover:bg-red-950/50 border-slate-700 hover:border-red-500/50 text-slate-300 hover:text-red-300 shadow-sm'
+                : 'bg-slate-950/40 border-slate-800 text-slate-600 cursor-not-allowed opacity-50'
+            }`}
+            title="Clear all active filters"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Clear Filters</span>
           </button>
         </div>
       </div>

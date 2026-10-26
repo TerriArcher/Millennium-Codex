@@ -31,6 +31,8 @@ function getSuperTypeQuery(superType: string): string {
       return 'Pendulum Effect Monster,Pendulum Normal Monster,Pendulum Tuner Effect Monster';
     case 'fusion':
       return 'Fusion Monster,Pendulum Effect Fusion Monster';
+    case 'tuner':
+      return 'Normal Tuner Monster,Synchro Tuner Monster,Pendulum Tuner Effect Monster,Flip Tuner Effect Monster';
     default:
       return superType;
   }
@@ -201,6 +203,7 @@ export function filterFallbackCards(filters: CardFilterState, excludeId?: number
       if (s === 'union' && !cardTypeLower.includes('union')) return false;
       if (s === 'pendulum' && !cardTypeLower.includes('pendulum') && card.scale === undefined) return false;
       if (s === 'fusion' && !cardTypeLower.includes('fusion')) return false;
+      if (s === 'tuner' && !cardTypeLower.includes('tuner')) return false;
     }
     if (filters.type) {
       const qType = String(filters.type).toLowerCase();

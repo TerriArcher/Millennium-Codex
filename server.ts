@@ -44,6 +44,8 @@ async function startServer() {
         return 'Pendulum Effect Monster,Pendulum Normal Monster,Pendulum Tuner Effect Monster';
       case 'fusion':
         return 'Fusion Monster,Pendulum Effect Fusion Monster';
+      case 'tuner':
+        return 'Normal Tuner Monster,Synchro Tuner Monster,Pendulum Tuner Effect Monster,Flip Tuner Effect Monster';
       default:
         return superType;
     }
