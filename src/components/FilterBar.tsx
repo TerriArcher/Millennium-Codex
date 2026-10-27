@@ -8,7 +8,7 @@ interface FilterBarProps {
   onDrawRandom: () => void;
   onResetFilters: () => void;
   isLoading: boolean;
-  totalMatches?: number;
+  totalMatches?: number; onOpenMatchingCards?: () => void;
 }
 
 export const ATTRIBUTES = ['DARK', 'LIGHT', 'EARTH', 'WATER', 'FIRE', 'WIND', 'DIVINE'];
@@ -52,7 +52,8 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   onDrawRandom,
   onResetFilters,
   isLoading,
-  totalMatches
+  totalMatches,
+  onOpenMatchingCards
 }) => {
   const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -92,6 +93,12 @@ export const FilterBar: React.FC<FilterBarProps> = ({
     }
   };
 
+  const handleRemoveCriterion = (key: keyof CardFilterState) => {
+    const updated = { ...filters };
+    delete updated[key];
+    onFilterChange(updated);
+  };
+
   const handlePropertyChange = (newType: string) => {
     const updated: CardFilterState = {
       ...filters,
@@ -128,11 +135,11 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto mb-8 bg-slate-900/80 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-lg backdrop-blur-sm">
+    <div className="w-full max-w-4xl mx-auto mb-6 sm:mb-8 bg-slate-900/80 border border-slate-800 rounded-2xl px-4 py-4 sm:px-6 sm:py-5 shadow-lg backdrop-blur-sm">
       {/* Top Filter Controls: Main Card Properties & Primary Draw Action */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3.5 sm:gap-4">
         {/* Card Property Segmented Control */}
-        <div className="flex items-center gap-1 p-1 bg-slate-950 rounded-xl border border-slate-800/80 overflow-x-auto scrollbar-none">
+        <div className="grid grid-cols-4 sm:flex items-center gap-1 p-1 sm:p-1.5 bg-slate-950 rounded-xl border border-slate-800/80 w-full md:w-auto overflow-x-auto scrollbar-none">
           {[
             { id: '', label: 'All' },
             { id: 'Monster', label: 'Monster' },
@@ -144,7 +151,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
               <button
                 key={item.id}
                 onClick={() => handlePropertyChange(item.id)}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all whitespace-nowrap cursor-pointer ${
+                className={`flex-1 sm:flex-initial px-2 sm:px-3.5 py-2 sm:py-1.5 text-xs font-semibold rounded-lg transition-all whitespace-nowrap text-center flex items-center justify-center cursor-pointer ${
                   isActive
                     ? 'bg-amber-400 text-slate-950 shadow-sm'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
@@ -157,19 +164,19 @@ export const FilterBar: React.FC<FilterBarProps> = ({
         </div>
 
         {/* Secondary controls and Main Draw CTA */}
-        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+        <div className="flex flex-wrap sm:flex-nowrap items-center justify-between md:justify-end gap-2 sm:gap-2.5 w-full md:w-auto">
           <button
             onClick={() => setShowAdvanced(!showAdvanced)}
-            className={`px-3 py-2 text-xs font-medium rounded-xl border transition-colors flex items-center gap-1.5 cursor-pointer ${
+            className={`px-3 sm:px-3.5 py-2.5 text-xs font-medium rounded-xl border transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer ${
               showAdvanced || hasAnyFilter
                 ? 'bg-slate-800 border-amber-500/50 text-amber-300'
                 : 'bg-slate-950/70 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
             }`}
           >
-            <SlidersHorizontal className="w-3.5 h-3.5" />
+            <SlidersHorizontal className="w-3.5 h-3.5 shrink-0" />
             <span>More Filters</span>
             {hasAnyFilter && (
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
             )}
           </button>
 
@@ -177,13 +184,21 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           <button
             onClick={onDrawRandom}
             disabled={isLoading}
-            className="flex-1 sm:flex-none px-5 py-2.5 text-sm font-bold text-slate-950 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 active:scale-98 rounded-xl shadow-md shadow-amber-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 whitespace-nowrap"
+            className={`flex-1 sm:flex-initial px-4 sm:px-5 py-2.5 text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-2 whitespace-nowrap disabled:bg-slate-800 disabled:from-slate-800 disabled:to-slate-800 disabled:text-slate-500 disabled:border-slate-700/80 disabled:shadow-none disabled:cursor-not-allowed disabled:pointer-events-none ${
+              isLoading
+                ? 'bg-slate-800 text-slate-500 border border-slate-700/80 shadow-none cursor-not-allowed pointer-events-none'
+                : 'text-slate-950 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 active:scale-98 shadow-md shadow-amber-500/20 cursor-pointer'
+            }`}
             title={hasAnyFilter ? 'Draw a random card matching active filters' : 'Draw random card'}
           >
-            <Sparkles className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+            <Sparkles className={`w-4 h-4 shrink-0 ${isLoading ? 'animate-spin text-slate-500' : ''}`} />
             <span>{isLoading ? 'Drawing...' : 'Draw Card'}</span>
             {hasAnyFilter && (
-              <span className="px-1.5 py-0.5 text-[10px] font-extrabold bg-slate-950/25 rounded-md">
+              <span
+                className={`px-1.5 py-0.5 text-[10px] font-extrabold rounded-md ${
+                  isLoading ? 'bg-slate-700/70 text-slate-400' : 'bg-slate-950/25'
+                }`}
+              >
                 Active
               </span>
             )}
@@ -193,14 +208,14 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           <button
             onClick={onResetFilters}
             disabled={!hasAnyFilter}
-            className={`px-3.5 py-2.5 text-xs font-semibold rounded-xl border transition-all flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer ${
+            className={`px-3 sm:px-3.5 py-2.5 text-xs font-semibold rounded-xl border transition-all flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer ${
               hasAnyFilter
                 ? 'bg-slate-800/90 hover:bg-red-950/50 border-slate-700 hover:border-red-500/50 text-slate-300 hover:text-red-300 shadow-sm'
                 : 'bg-slate-950/40 border-slate-800 text-slate-600 cursor-not-allowed opacity-50'
             }`}
             title="Clear all active filters"
           >
-            <RotateCcw className="w-3.5 h-3.5" />
+            <RotateCcw className="w-3.5 h-3.5 shrink-0" />
             <span>Clear Filters</span>
           </button>
         </div>
@@ -208,68 +223,139 @@ export const FilterBar: React.FC<FilterBarProps> = ({
 
       {/* Active Filter Notification Bar */}
       {hasAnyFilter && (
-        <div className="mt-3 pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-xs">
+        <div className="mt-3.5 pt-3.5 border-t border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
           <div className="flex items-center gap-1.5 flex-wrap text-slate-300">
             <span className="text-slate-500 font-medium mr-1">Active criteria:</span>
             {filters.type && (
-              <span className="bg-slate-800 px-2 py-0.5 rounded text-amber-300 border border-slate-700 font-semibold">
-                Property: {filters.type}
-              </span>
+              <button
+                type="button"
+                onClick={() => handleRemoveCriterion('type')}
+                title="Click to deselect Property filter"
+                className="group bg-slate-800 hover:bg-red-950/40 px-2 py-0.5 rounded text-amber-300 hover:text-red-300 border border-slate-700 hover:border-red-500/50 font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+              >
+                <span>Property: {filters.type}</span>
+                <X className="w-3 h-3 opacity-60 group-hover:opacity-100 group-hover:text-red-400" />
+              </button>
             )}
             {filters.superType && (
-              <span className="bg-amber-400/20 px-2 py-0.5 rounded text-amber-300 border border-amber-500/40 font-semibold">
-                Super: {filters.superType}
-              </span>
+              <button
+                type="button"
+                onClick={() => handleRemoveCriterion('superType')}
+                title="Click to deselect Super Type filter"
+                className="group bg-amber-400/20 hover:bg-red-950/40 px-2 py-0.5 rounded text-amber-300 hover:text-red-300 border border-amber-500/40 hover:border-red-500/50 font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+              >
+                <span>Super: {filters.superType}</span>
+                <X className="w-3 h-3 opacity-60 group-hover:opacity-100 group-hover:text-red-400" />
+              </button>
             )}
             {filters.scale !== undefined && (
-              <span className="bg-teal-950 px-2 py-0.5 rounded text-teal-300 border border-teal-600/40 font-mono">
-                Scale: {filters.scale}
-              </span>
+              <button
+                type="button"
+                onClick={() => handleRemoveCriterion('scale')}
+                title="Click to deselect Pendulum Scale filter"
+                className="group bg-teal-950 hover:bg-red-950/40 px-2 py-0.5 rounded text-teal-300 hover:text-red-300 border border-teal-600/40 hover:border-red-500/50 font-mono flex items-center gap-1 cursor-pointer transition-colors"
+              >
+                <span>Scale: {filters.scale}</span>
+                <X className="w-3 h-3 opacity-60 group-hover:opacity-100 group-hover:text-red-400" />
+              </button>
             )}
             {filters.archetype && (
-              <span className="bg-amber-950/40 px-2 py-0.5 rounded text-amber-300 border border-amber-600/40">
-                Archetype: {filters.archetype}
-              </span>
+              <button
+                type="button"
+                onClick={() => handleRemoveCriterion('archetype')}
+                title="Click to deselect Archetype filter"
+                className="group bg-amber-950/40 hover:bg-red-950/40 px-2 py-0.5 rounded text-amber-300 hover:text-red-300 border border-amber-600/40 hover:border-red-500/50 flex items-center gap-1 cursor-pointer transition-colors"
+              >
+                <span>Archetype: {filters.archetype}</span>
+                <X className="w-3 h-3 opacity-60 group-hover:opacity-100 group-hover:text-red-400" />
+              </button>
             )}
             {filters.attribute && (
-              <span className="bg-slate-800 px-2 py-0.5 rounded text-amber-300 border border-slate-700">
-                Attribute: {filters.attribute}
-              </span>
+              <button
+                type="button"
+                onClick={() => handleRemoveCriterion('attribute')}
+                title="Click to deselect Attribute filter"
+                className="group bg-slate-800 hover:bg-red-950/40 px-2 py-0.5 rounded text-amber-300 hover:text-red-300 border border-slate-700 hover:border-red-500/50 flex items-center gap-1 cursor-pointer transition-colors"
+              >
+                <span>Attribute: {filters.attribute}</span>
+                <X className="w-3 h-3 opacity-60 group-hover:opacity-100 group-hover:text-red-400" />
+              </button>
             )}
             {filters.level !== undefined && (
-              <span className="bg-slate-800 px-2 py-0.5 rounded text-amber-300 border border-slate-700">
-                Level/Rank: {filters.level}
-              </span>
+              <button
+                type="button"
+                onClick={() => handleRemoveCriterion('level')}
+                title="Click to deselect Level/Rank filter"
+                className="group bg-slate-800 hover:bg-red-950/40 px-2 py-0.5 rounded text-amber-300 hover:text-red-300 border border-slate-700 hover:border-red-500/50 flex items-center gap-1 cursor-pointer transition-colors"
+              >
+                <span>Level/Rank: {filters.level}</span>
+                <X className="w-3 h-3 opacity-60 group-hover:opacity-100 group-hover:text-red-400" />
+              </button>
             )}
             {filters.race && (
-              <span className="bg-slate-800 px-2 py-0.5 rounded text-amber-300 border border-slate-700">
-                {isSpell || isTrap || ALL_SUBTYPES.includes(currentSubtype)
-                  ? `Subtype: ${currentSubtype}`
-                  : `Monster Type: ${filters.race}`}
-              </span>
+              <button
+                type="button"
+                onClick={() => handleRemoveCriterion('race')}
+                title="Click to deselect Type/Subtype filter"
+                className="group bg-slate-800 hover:bg-red-950/40 px-2 py-0.5 rounded text-amber-300 hover:text-red-300 border border-slate-700 hover:border-red-500/50 flex items-center gap-1 cursor-pointer transition-colors"
+              >
+                <span>
+                  {isSpell || isTrap || ALL_SUBTYPES.includes(currentSubtype)
+                    ? `Subtype: ${currentSubtype}`
+                    : `Monster Type: ${filters.race}`}
+                </span>
+                <X className="w-3 h-3 opacity-60 group-hover:opacity-100 group-hover:text-red-400" />
+              </button>
             )}
             {filters.atk !== undefined && (
-              <span className="bg-slate-800 px-2 py-0.5 rounded text-red-300 border border-red-900/50">
-                ATK: {filters.atk}
-              </span>
+              <button
+                type="button"
+                onClick={() => handleRemoveCriterion('atk')}
+                title="Click to deselect ATK filter"
+                className="group bg-slate-800 hover:bg-red-950/40 px-2 py-0.5 rounded text-red-300 hover:text-red-200 border border-red-900/50 hover:border-red-500/50 flex items-center gap-1 cursor-pointer transition-colors"
+              >
+                <span>ATK: {filters.atk}</span>
+                <X className="w-3 h-3 opacity-60 group-hover:opacity-100 group-hover:text-red-400" />
+              </button>
             )}
             {filters.def !== undefined && (
-              <span className="bg-slate-800 px-2 py-0.5 rounded text-blue-300 border border-blue-900/50">
-                DEF: {filters.def}
-              </span>
+              <button
+                type="button"
+                onClick={() => handleRemoveCriterion('def')}
+                title="Click to deselect DEF filter"
+                className="group bg-slate-800 hover:bg-red-950/40 px-2 py-0.5 rounded text-blue-300 hover:text-red-300 border border-blue-900/50 hover:border-red-500/50 flex items-center gap-1 cursor-pointer transition-colors"
+              >
+                <span>DEF: {filters.def}</span>
+                <X className="w-3 h-3 opacity-60 group-hover:opacity-100 group-hover:text-red-400" />
+              </button>
             )}
             {filters.keyword && (
-              <span className="bg-slate-800 px-2 py-0.5 rounded text-slate-200 border border-slate-700">
-                Keyword: "{filters.keyword}"
-              </span>
+              <button
+                type="button"
+                onClick={() => handleRemoveCriterion('keyword')}
+                title="Click to deselect Keyword filter"
+                className="group bg-slate-800 hover:bg-red-950/40 px-2 py-0.5 rounded text-slate-200 hover:text-red-300 border border-slate-700 hover:border-red-500/50 flex items-center gap-1 cursor-pointer transition-colors"
+              >
+                <span>Keyword: "{filters.keyword}"</span>
+                <X className="w-3 h-3 opacity-60 group-hover:opacity-100 group-hover:text-red-400" />
+              </button>
             )}
           </div>
 
           <div className="flex items-center gap-2 text-slate-400">
             {totalMatches !== undefined && (
-              <span className="font-mono text-[11px]">
-                {totalMatches} matching in database
-              </span>
+              <button
+                type="button"
+                onClick={onOpenMatchingCards}
+                title="View all cards matching these criteria in a bottom gallery"
+                className="font-mono text-[11px] text-amber-400 hover:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 hover:border-amber-400/60 px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shadow-sm group"
+              >
+                <Layers className="w-3.5 h-3.5 text-amber-400 group-hover:scale-110 transition-transform" />
+                <span className="font-semibold underline underline-offset-2">
+                  {totalMatches} matching in database
+                </span>
+                <span className="text-[10px] text-amber-400/80">· View all ↑</span>
+              </button>
             )}
             <button
               onClick={onResetFilters}
@@ -282,185 +368,215 @@ export const FilterBar: React.FC<FilterBarProps> = ({
         </div>
       )}
 
-      {/* Expanded Filter Panel */}
-      {showAdvanced && (
-        <div className="mt-4 pt-4 border-t border-slate-800 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
-          {/* 1. Property Dropdown */}
-          <div>
-            <label className="block text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px]">
-              Card Property
-            </label>
-            <select
-              value={filters.type || ''}
-              onChange={(e) => handlePropertyChange(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-amber-400 font-medium"
-            >
-              <option value="">Any Property</option>
-              <option value="Monster">Monster</option>
-              <option value="Spell Card">Spell Card</option>
-              <option value="Trap Card">Trap Card</option>
-            </select>
-          </div>
-
-          {/* 2. Spell / Trap Subtype (When Spell, Trap, or All is selected) */}
-          {(!isMonster || !filters.type) && (
-            <div>
-              <label className="block text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px]">
-                {isSpell ? 'Spell Subtype' : isTrap ? 'Trap Subtype' : 'Spell / Trap Subtype'}
+      {/* Expanded Filter Panel with Smooth Expand/Collapse Animation */}
+      <div
+        aria-hidden={!showAdvanced}
+        className={`grid transition-all duration-300 ease-in-out ${
+          showAdvanced
+            ? 'grid-rows-[1fr] opacity-100 mt-3 sm:mt-4'
+            : 'grid-rows-[0fr] opacity-0 mt-0 pointer-events-none'
+        }`}
+      >
+        <div className="overflow-hidden min-h-0">
+          <div className="pt-3 sm:pt-4 border-t border-slate-800 grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 text-xs">
+            {/* 1. Property Dropdown */}
+            <div className="min-w-0">
+              <label className="block text-slate-400 font-semibold mb-1 sm:mb-1.5 uppercase tracking-wider text-[10px] truncate">
+                Card Property
               </label>
               <select
-                value={ALL_SUBTYPES.includes(currentSubtype) ? currentSubtype : ''}
-                onChange={(e) => handleSubtypeChange(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-amber-400"
+                value={filters.type || ''}
+                onChange={(e) => handlePropertyChange(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 sm:px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-amber-400 font-medium"
               >
-                <option value="">Any Subtype</option>
-                {(isSpell ? SPELL_SUBTYPES : isTrap ? TRAP_SUBTYPES : ALL_SUBTYPES).map((sub) => (
-                  <option key={sub} value={sub}>{sub}</option>
-                ))}
+                <option value="">Any</option>
+                <option value="Monster">Monster</option>
+                <option value="Spell Card">Spell Card</option>
+                <option value="Trap Card">Trap Card</option>
               </select>
             </div>
-          )}
 
-          {/* 3. Monster-Specific: Super Type */}
-          {(!isSpell && !isTrap) && (
-            <div>
-              <label className="block text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px] flex items-center gap-1">
-                <Layers className="w-3 h-3 text-amber-400" />
-                <span>Super Type</span>
+            {/* 2. Spell / Trap Subtype (When Spell, Trap, or All is selected) */}
+            {(!isMonster || !filters.type) && (
+              <div className="min-w-0">
+                <label className="block text-slate-400 font-semibold mb-1 sm:mb-1.5 uppercase tracking-wider text-[10px] truncate">
+                  {isSpell ? 'Spell Subtype' : isTrap ? 'Trap Subtype' : 'Spell / Trap Subtype'}
+                </label>
+                <select
+                  value={ALL_SUBTYPES.includes(currentSubtype) ? currentSubtype : ''}
+                  onChange={(e) => handleSubtypeChange(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 sm:px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-amber-400"
+                >
+                  <option value="">Any</option>
+                  {(isSpell ? SPELL_SUBTYPES : isTrap ? TRAP_SUBTYPES : ALL_SUBTYPES).map((sub) => (
+                    <option key={sub} value={sub}>{sub}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* 3. Monster-Specific: Super Type */}
+            {(!isSpell && !isTrap) && (
+              <div className="min-w-0">
+                <label className="text-slate-400 font-semibold mb-1 sm:mb-1.5 uppercase tracking-wider text-[10px] flex items-center gap-1 truncate">
+                  <Layers className="w-3 h-3 text-amber-400 shrink-0" />
+                  <span className="truncate">Super Type</span>
+                </label>
+                <select
+                  value={filters.superType || ''}
+                  onChange={(e) =>
+                    onFilterChange({
+                      ...filters,
+                      superType: e.target.value || undefined,
+                      type: e.target.value ? 'Monster' : filters.type
+                    })
+                  }
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 sm:px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-amber-400 font-medium"
+                >
+                  <option value="">Any</option>
+                  {SUPER_TYPES.map((st) => (
+                    <option key={st} value={st}>{st}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* 4. Monster-Specific: Race / Monster Type */}
+            {(!isSpell && !isTrap) && (
+              <div className="min-w-0">
+                <label className="block text-slate-400 font-semibold mb-1 sm:mb-1.5 uppercase tracking-wider text-[10px] truncate">
+                  Monster Type / Race
+                </label>
+                <select
+                  value={MONSTER_RACES.includes(filters.race || '') ? filters.race : ''}
+                  onChange={(e) => onFilterChange({ ...filters, race: e.target.value || undefined })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 sm:px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-amber-400"
+                >
+                  <option value="">Any</option>
+                  {MONSTER_RACES.map((race) => (
+                    <option key={race} value={race}>{race}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* 5. Monster-Specific: Attribute */}
+            {(!isSpell && !isTrap) && (
+              <div className="min-w-0">
+                <label className="block text-slate-400 font-semibold mb-1 sm:mb-1.5 uppercase tracking-wider text-[10px] truncate">
+                  Attribute
+                </label>
+                <select
+                  value={filters.attribute || ''}
+                  onChange={(e) => onFilterChange({ ...filters, attribute: e.target.value || undefined })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 sm:px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-amber-400"
+                >
+                  <option value="">Any</option>
+                  {ATTRIBUTES.map((attr) => (
+                    <option key={attr} value={attr}>{attr}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* 6. Monster-Specific: Level / Rank */}
+            {(!isSpell && !isTrap) && (
+              <div className="min-w-0">
+                <label className="block text-slate-400 font-semibold mb-1 sm:mb-1.5 uppercase tracking-wider text-[10px] truncate">
+                  Level / Rank (0–12)
+                </label>
+                <select
+                  value={filters.level !== undefined ? String(filters.level) : ''}
+                  onChange={(e) => onFilterChange({ ...filters, level: e.target.value !== '' ? Number(e.target.value) : undefined })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 sm:px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-amber-400 font-mono"
+                >
+                  <option value="">Any</option>
+                  {LEVELS.map((lvl) => (
+                    <option key={lvl} value={lvl}>★ Level / Rank {lvl}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* 7. Monster-Specific: Pendulum Scale */}
+            {(!isSpell && !isTrap) && (
+              <div className="min-w-0">
+                <label className="block text-slate-400 font-semibold mb-1 sm:mb-1.5 uppercase tracking-wider text-[10px] truncate">
+                  Pendulum Scale
+                </label>
+                <select
+                  value={filters.scale !== undefined ? String(filters.scale) : ''}
+                  onChange={(e) =>
+                    onFilterChange({
+                      ...filters,
+                      scale: e.target.value !== '' ? Number(e.target.value) : undefined,
+                      superType: e.target.value !== '' ? 'Pendulum' : filters.superType
+                    })
+                  }
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 sm:px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-amber-400 font-mono"
+                >
+                  <option value="">Any</option>
+                  {SCALES.map((sc) => (
+                    <option key={sc} value={sc}>◄ Scale {sc} ►</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* 8. Archetype Search (Full width on mobile since it is a text box) */}
+            <div className="col-span-2 sm:col-span-1 min-w-0">
+              <label className="block text-slate-400 font-semibold mb-1 sm:mb-1.5 uppercase tracking-wider text-[10px] truncate">
+                Archetype Filter
               </label>
-              <select
-                value={filters.superType || ''}
-                onChange={(e) =>
-                  onFilterChange({
-                    ...filters,
-                    superType: e.target.value || undefined,
-                    type: e.target.value ? 'Monster' : filters.type
-                  })
-                }
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-amber-400 font-medium"
-              >
-                <option value="">Any Super Type</option>
-                {SUPER_TYPES.map((st) => (
-                  <option key={st} value={st}>{st}</option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {/* 4. Monster-Specific: Race / Monster Type */}
-          {(!isSpell && !isTrap) && (
-            <div>
-              <label className="block text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px]">
-                Monster Type / Race
-              </label>
-              <select
-                value={MONSTER_RACES.includes(filters.race || '') ? filters.race : ''}
-                onChange={(e) => onFilterChange({ ...filters, race: e.target.value || undefined })}
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-amber-400"
-              >
-                <option value="">Any Monster Type</option>
-                {MONSTER_RACES.map((race) => (
-                  <option key={race} value={race}>{race}</option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {/* 5. Monster-Specific: Attribute */}
-          {(!isSpell && !isTrap) && (
-            <div>
-              <label className="block text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px]">
-                Attribute
-              </label>
-              <select
-                value={filters.attribute || ''}
-                onChange={(e) => onFilterChange({ ...filters, attribute: e.target.value || undefined })}
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-amber-400"
-              >
-                <option value="">Any Attribute</option>
-                {ATTRIBUTES.map((attr) => (
-                  <option key={attr} value={attr}>{attr}</option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {/* 6. Monster-Specific: Level / Rank */}
-          {(!isSpell && !isTrap) && (
-            <div>
-              <label className="block text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px]">
-                Level / Rank (0–12)
-              </label>
-              <select
-                value={filters.level !== undefined ? String(filters.level) : ''}
-                onChange={(e) => onFilterChange({ ...filters, level: e.target.value !== '' ? Number(e.target.value) : undefined })}
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-amber-400 font-mono"
-              >
-                <option value="">Any Level / Rank</option>
-                {LEVELS.map((lvl) => (
-                  <option key={lvl} value={lvl}>★ Level / Rank {lvl}</option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {/* 7. Monster-Specific: Pendulum Scale */}
-          {(!isSpell && !isTrap) && (
-            <div>
-              <label className="block text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px]">
-                Pendulum Scale
-              </label>
-              <select
-                value={filters.scale !== undefined ? String(filters.scale) : ''}
-                onChange={(e) =>
-                  onFilterChange({
-                    ...filters,
-                    scale: e.target.value !== '' ? Number(e.target.value) : undefined,
-                    superType: e.target.value !== '' ? 'Pendulum' : filters.superType
-                  })
-                }
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-amber-400 font-mono"
-              >
-                <option value="">Any Scale</option>
-                {SCALES.map((sc) => (
-                  <option key={sc} value={sc}>◄ Scale {sc} ►</option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {/* 8. Archetype Search */}
-          <div>
-            <label className="block text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px]">
-              Archetype Filter
-            </label>
-            <input
-              type="text"
-              placeholder="e.g. Blue-Eyes, HERO, Magician..."
-              value={filters.archetype || ''}
-              onChange={(e) => onFilterChange({ ...filters, archetype: e.target.value || undefined })}
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-amber-400"
-            />
-          </div>
-
-          {/* 9. Card Name / Keyword Search */}
-          <div className="sm:col-span-2 lg:col-span-2">
-            <label className="block text-slate-400 font-semibold mb-1.5 uppercase tracking-wider text-[10px]">
-              Card Name / Keyword Search
-            </label>
-            <div className="relative">
               <input
                 type="text"
-                placeholder="Search card text, partial names, or descriptions..."
-                value={filters.keyword || ''}
-                onChange={(e) => onFilterChange({ ...filters, keyword: e.target.value || undefined })}
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-8 pr-2.5 py-1.5 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-amber-400"
+                placeholder="e.g. Blue-Eyes, HERO, Magician..."
+                value={filters.archetype || ''}
+                onChange={(e) => onFilterChange({ ...filters, archetype: e.target.value || undefined })}
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-amber-400"
               />
-              <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+
+            {/* 9. Card Name / Keyword Search (Full width on mobile since it is a text box) */}
+            <div className="col-span-2 sm:col-span-2 lg:col-span-2 min-w-0">
+              <label className="block text-slate-400 font-semibold mb-1 sm:mb-1.5 uppercase tracking-wider text-[10px] truncate">
+                Card Name / Keyword Search
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Search card text, partial names, or descriptions..."
+                  value={filters.keyword || ''}
+                  onChange={(e) => onFilterChange({ ...filters, keyword: e.target.value || undefined })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-8 pr-2.5 py-1.5 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-amber-400"
+                />
+                <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+            </div>
+
+            {/* More Filters Database Matches Summary Bar */}
+            <div className="col-span-full pt-3 mt-1 flex flex-wrap items-center justify-between gap-3 border-t border-slate-800/80 text-xs">
+              <div className="flex items-center gap-2 text-slate-300">
+                <span className="text-slate-500 font-medium">Matching cards in database:</span>
+                <span className="font-mono font-bold text-amber-400 text-sm">
+                  {totalMatches !== undefined ? totalMatches.toLocaleString() : '13,000+'}
+                </span>
+                <span className="text-slate-400">cards</span>
+              </div>
+              {onOpenMatchingCards && (
+                <button
+                  type="button"
+                  onClick={onOpenMatchingCards}
+                  className="text-xs text-amber-400 hover:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 hover:border-amber-400 px-2.5 py-1 rounded-lg font-semibold flex items-center gap-1.5 cursor-pointer transition-all shadow-sm"
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>View All Matching Cards ↑</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 };

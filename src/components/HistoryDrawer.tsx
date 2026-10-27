@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { YugiohCard } from '../types/card';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { toggleFavorite } from '../store/slices/historySlice';
@@ -22,17 +22,54 @@ export const HistoryDrawer: React.FC<HistoryDrawerProps> = ({
   const dispatch = useAppDispatch();
   const favorites = useAppSelector((state) => state.history.favorites);
 
-  if (!isOpen) return null;
+  const [shouldRender, setShouldRender] = useState(isOpen);
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    let raf1: number;
+    let raf2: number;
+    let timer: number;
+
+    if (isOpen) {
+      setShouldRender(true);
+      raf1 = window.requestAnimationFrame(() => {
+        raf2 = window.requestAnimationFrame(() => {
+          setIsVisible(true);
+        });
+      });
+    } else {
+      setIsVisible(false);
+      timer = window.setTimeout(() => {
+        setShouldRender(false);
+      }, 300);
+    }
+
+    return () => {
+      window.cancelAnimationFrame(raf1);
+      window.cancelAnimationFrame(raf2);
+      window.clearTimeout(timer);
+    };
+  }, [isOpen]);
+
+  if (!shouldRender) return null;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden bg-black/60 backdrop-blur-xs flex justify-end">
+    <div
+      className={`fixed inset-0 z-50 overflow-hidden flex justify-end transition-opacity duration-300 ease-in-out ${
+        isVisible ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+      }`}
+    >
       <div
-        className="fixed inset-0"
+        className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity duration-300 ease-in-out"
         onClick={onClose}
         aria-hidden="true"
       />
 
-      <div className="relative z-10 w-full max-w-md bg-slate-900 border-l border-slate-800 h-full flex flex-col shadow-2xl animate-in slide-in-from-right duration-200">
+      <div
+        className={`relative z-10 w-full max-w-md bg-slate-900 border-l border-slate-800 h-full flex flex-col shadow-2xl transform transition-transform duration-300 ease-in-out ${
+          isVisible ? 'translate-x-0' : 'translate-x-full'
+        }`}
+      >
         {/* Header */}
         <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-2.5">

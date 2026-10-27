@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { YugiohCard } from '../types/card';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { removeFavorite, clearFavorites } from '../store/slices/historySlice';
-import { X, Heart, Trash2, ArrowRight, Sparkles } from 'lucide-react';
+import { X, Heart, Trash2, ArrowRight } from 'lucide-react';
 import { FALLBACK_CARDS } from '../data/fallbackCards';
 
 interface FavoritesDrawerProps {
@@ -19,15 +19,45 @@ export const FavoritesDrawer: React.FC<FavoritesDrawerProps> = ({
   const dispatch = useAppDispatch();
   const favorites = useAppSelector((state) => state.history.favorites);
   const favoriteCardsMap = useAppSelector((state) => state.history.favoriteCards);
-  const cardEntities = useAppSelector((state) => state.cards.cardEntities);
+  const history = useAppSelector((state) => state.history.history);
 
-  if (!isOpen) return null;
+  const [shouldRender, setShouldRender] = useState(isOpen);
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    let raf1: number;
+    let raf2: number;
+    let timer: number;
+
+    if (isOpen) {
+      setShouldRender(true);
+      raf1 = window.requestAnimationFrame(() => {
+        raf2 = window.requestAnimationFrame(() => {
+          setIsVisible(true);
+        });
+      });
+    } else {
+      setIsVisible(false);
+      timer = window.setTimeout(() => {
+        setShouldRender(false);
+      }, 300);
+    }
+
+    return () => {
+      window.cancelAnimationFrame(raf1);
+      window.cancelAnimationFrame(raf2);
+      window.clearTimeout(timer);
+    };
+  }, [isOpen]);
+
+  if (!shouldRender) return null;
 
   // Resolve card objects for all favorite IDs
   const resolvedCards: YugiohCard[] = favorites
     .map((id) => {
       if (favoriteCardsMap[id]) return favoriteCardsMap[id];
-      if (cardEntities[id]) return cardEntities[id];
+      const inHistory = history.find((c) => c.id === id);
+      if (inHistory) return inHistory;
       const fallback = FALLBACK_CARDS.find((c) => c.id === id);
       if (fallback) return fallback;
       return null;
@@ -35,14 +65,22 @@ export const FavoritesDrawer: React.FC<FavoritesDrawerProps> = ({
     .filter(Boolean) as YugiohCard[];
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden bg-black/60 backdrop-blur-xs flex justify-start">
+    <div
+      className={`fixed inset-0 z-50 overflow-hidden flex justify-start transition-opacity duration-300 ease-in-out ${
+        isVisible ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+      }`}
+    >
       <div
-        className="fixed inset-0"
+        className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity duration-300 ease-in-out"
         onClick={onClose}
         aria-hidden="true"
       />
 
-      <div className="relative z-10 w-full max-w-md bg-slate-900 border-r border-slate-800 h-full flex flex-col shadow-2xl animate-in slide-in-from-left duration-200">
+      <div
+        className={`relative z-10 w-full max-w-md bg-slate-900 border-r border-slate-800 h-full flex flex-col shadow-2xl transform transition-transform duration-300 ease-in-out ${
+          isVisible ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
         {/* Header */}
         <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-2.5">

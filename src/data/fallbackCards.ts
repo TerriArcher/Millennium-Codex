@@ -855,3 +855,7 @@ export const META_RESOURCES: MetaResource[] = [
     recommendedFor: "Engaging in discussions, asking deck advice, and participating in the wider global player base."
   }
 ];
+
+export const INITIAL_START_CARD: YugiohCard =
+  INITIAL_ACE_CARDS[Math.floor(Math.random() * INITIAL_ACE_CARDS.length)];
+

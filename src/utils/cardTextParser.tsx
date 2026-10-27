@@ -105,14 +105,35 @@ interface HighlightedCardTextProps {
   text: string;
   activeFilters: CardFilterState;
   onSelectKeyword: (definition: KeywordDefinition) => void;
+  onRemoveKeyword?: (definition: KeywordDefinition) => void;
+  disabled?: boolean;
+}
+
+// Helper to find all index ranges enclosed within quotation marks (e.g. "Stardust Dragon" or \"Dark Magician\")
+function getQuotedRanges(str: string): Array<[number, number]> {
+  const ranges: Array<[number, number]> = [];
+  const quoteRegex = /(?:"|\\"|“)(.*?)(?:"|\\"|”)/g;
+  let m: RegExpExecArray | null;
+  while ((m = quoteRegex.exec(str)) !== null) {
+    ranges.push([m.index, m.index + m[0].length]);
+  }
+  return ranges;
 }
 
 export const HighlightedCardText: React.FC<HighlightedCardTextProps> = ({
   text,
   activeFilters,
-  onSelectKeyword
+  onSelectKeyword,
+  onRemoveKeyword,
+  disabled = false
 }) => {
   if (!text) return null;
+  if (disabled) return <>{text}</>;
+
+  const quotedRanges = getQuotedRanges(text);
+  const isInsideQuotes = (start: number, end: number) => {
+    return quotedRanges.some(([qStart, qEnd]) => start >= qStart && end <= qEnd);
+  };
 
   const parts: React.ReactNode[] = [];
   let lastIndex = 0;
@@ -134,15 +155,22 @@ export const HighlightedCardText: React.FC<HighlightedCardTextProps> = ({
     const lowerMatch = matchedText.toLowerCase();
 
     // Check exclusion rules:
-    // 1. Remove Normal if the next word is "or" (e.g. "Normal or Special Summon")
-    // 2. Remove Quick if the next word is "effect" (e.g. "(Quick Effect):")
+    // 1. Text contained within quotation marks should not be selected for filters
+    // 2. Remove Normal if the next word is "or" (e.g. "Normal or Special Summon")
+    // 3. Remove Quick if the next word is "effect" (e.g. "(Quick Effect):")
+    // 4. "Counter" should only reference "Counter Trap" and not standalone uses of "counter"
+    // 5. "Field" should specifically look for "Field" with a capital F and ignore lowercase "field"
+    const inQuotes = isInsideQuotes(startIndex, endIndex);
     const remainingText = text.slice(endIndex);
     const nextWordMatch = remainingText.match(/^[\s/]*([a-zA-Z]+)/);
     const nextWord = nextWordMatch ? nextWordMatch[1].toLowerCase() : '';
 
     const isExcluded =
+      inQuotes ||
       (lowerMatch === 'normal' && nextWord === 'or') ||
-      (lowerMatch === 'quick' && nextWord === 'effect');
+      (lowerMatch === 'quick' && nextWord === 'effect') ||
+      (lowerMatch === 'counter' && nextWord !== 'trap') ||
+      (lowerMatch === 'field' && matchedText[0] !== 'F');
 
     const def = isExcluded ? undefined : KEYWORD_MAP.get(lowerMatch);
 
@@ -154,31 +182,51 @@ export const HighlightedCardText: React.FC<HighlightedCardTextProps> = ({
         String(currentVal).toLowerCase() === String(def.filterValue).toLowerCase();
 
       parts.push(
-        <button
+        <span
           key={`${startIndex}-${matchedText}`}
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onSelectKeyword(def);
-          }}
-          title={
+          className={`inline-flex items-center mx-0.5 rounded text-xs font-semibold transition-all duration-150 align-baseline ${
             isCurrentlyActive
-              ? `Active in filter: ${def.displayLabel}. Click to remove.`
-              : `Click to add ${def.displayLabel} to filter criteria.`
-          }
-          className={`inline-flex items-center px-1.5 py-0.5 mx-0.5 rounded text-xs font-semibold cursor-pointer transition-all duration-150 align-baseline ${
-            isCurrentlyActive
-              ? 'bg-amber-400 text-slate-950 font-bold shadow-sm ring-1 ring-amber-300 scale-102'
+              ? 'bg-amber-400 text-slate-950 font-bold shadow-sm ring-1 ring-amber-300'
               : 'bg-amber-500/15 hover:bg-amber-500/30 text-amber-300 hover:text-amber-100 border border-amber-500/40 hover:border-amber-400'
           }`}
         >
-          <span>{matchedText}</span>
-          {isCurrentlyActive ? (
-            <span className="ml-1 text-[10px] text-slate-950 font-bold">✓</span>
-          ) : (
-            <span className="ml-1 text-[10px] text-amber-400/80 font-mono">+</span>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelectKeyword(def);
+            }}
+            title={
+              isCurrentlyActive
+                ? `${def.displayLabel} is already selected`
+                : `Click to add ${def.displayLabel} to filter criteria`
+            }
+            className="px-1.5 py-0.5 inline-flex items-center cursor-pointer"
+          >
+            <span>{matchedText}</span>
+            {!isCurrentlyActive && (
+              <span className="ml-1 text-[10px] text-amber-400/80 font-mono">+</span>
+            )}
+          </button>
+          {isCurrentlyActive && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onRemoveKeyword) {
+                  onRemoveKeyword(def);
+                } else {
+                  onSelectKeyword(def);
+                }
+              }}
+              title={`Remove ${def.displayLabel} from filters`}
+              aria-label={`Remove ${def.displayLabel} filter`}
+              className="pr-1.5 pl-1 py-0.5 text-[10px] text-slate-950 hover:text-red-900 font-extrabold border-l border-slate-950/20 cursor-pointer"
+            >
+              ×
+            </button>
           )}
-        </button>
+        </span>
       );
     } else {
       parts.push(matchedText);

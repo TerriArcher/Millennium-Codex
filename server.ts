@@ -314,10 +314,39 @@ async function startServer() {
       } else if (type) {
         const t = String(type);
         if (t.toLowerCase() === 'monster') {
-          params.append('has_effect', 'true,false');
-        } else if (t.toLowerCase() === 'spell') {
+          params.append(
+            'type',
+            [
+              'Effect Monster',
+              'Flip Effect Monster',
+              'Flip Tuner Effect Monster',
+              'Gemini Monster',
+              'Normal Monster',
+              'Normal Tuner Monster',
+              'Pendulum Effect Monster',
+              'Pendulum Effect Ritual Monster',
+              'Pendulum Flip Effect Monster',
+              'Pendulum Normal Monster',
+              'Pendulum Tuner Effect Monster',
+              'Ritual Effect Monster',
+              'Ritual Monster',
+              'Spirit Monster',
+              'Toon Monster',
+              'Tuner Monster',
+              'Union Effect Monster',
+              'Fusion Monster',
+              'Link Monster',
+              'Pendulum Effect Fusion Monster',
+              'Synchro Monster',
+              'Synchro Pendulum Effect Monster',
+              'Synchro Tuner Monster',
+              'XYZ Monster',
+              'XYZ Pendulum Effect Monster'
+            ].join(',')
+          );
+        } else if (t.toLowerCase().includes('spell')) {
           params.append('type', 'Spell Card');
-        } else if (t.toLowerCase() === 'trap') {
+        } else if (t.toLowerCase().includes('trap')) {
           params.append('type', 'Trap Card');
         } else {
           params.append('type', t);

@@ -1,8 +1,10 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { YugiohCard } from '../../types/card';
-import { INITIAL_ACE_CARDS, FALLBACK_CARDS } from '../../data/fallbackCards';
+import { INITIAL_START_CARD, FALLBACK_CARDS } from '../../data/fallbackCards';
+import { normalizeCard } from '../../services/ygoprodeckApi';
 
-const MAX_HISTORY = 50;
+const MAX_HISTORY = 30;
+const MAX_FAVORITES = 100;
 const FAVORITES_STORAGE_KEY = 'millennium_codex_favs';
 const FAV_CARDS_STORAGE_KEY = 'millennium_codex_fav_cards';
 
@@ -11,7 +13,12 @@ function loadFavoritesFromStorage(): number[] {
     const raw = localStorage.getItem(FAVORITES_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed.map(Number);
+      if (Array.isArray(parsed)) {
+        return Array.from(new Set(parsed.map(Number).filter((n) => !isNaN(n)))).slice(
+          0,
+          MAX_FAVORITES
+        );
+      }
     }
   } catch (e) {
     console.warn('Failed to load favorites from localStorage', e);
@@ -21,38 +28,72 @@ function loadFavoritesFromStorage(): number[] {
 
 function saveFavoritesToStorage(favs: number[]) {
   try {
-    localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(favs.slice(0, 200)));
+    localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(favs.slice(0, MAX_FAVORITES)));
   } catch (e) {
     console.warn('Failed to save favorites to localStorage', e);
   }
 }
 
-function loadFavoriteCardsFromStorage(): Record<number, YugiohCard> {
-  const map: Record<number, YugiohCard> = {};
-  // Prepopulate with fallback cards
-  FALLBACK_CARDS.forEach((c) => {
-    map[c.id] = c;
-  });
+function saveFavoriteCardsToStorage(
+  cardsMap: Record<number, YugiohCard>,
+  activeFavIds: number[]
+) {
+  try {
+    const favSet = new Set(activeFavIds);
+    const prunedMap: Record<number, YugiohCard> = {};
+    for (const id of favSet) {
+      if (cardsMap[id]) {
+        prunedMap[id] = normalizeCard(cardsMap[id]);
+      }
+    }
+    localStorage.setItem(FAV_CARDS_STORAGE_KEY, JSON.stringify(prunedMap));
+  } catch (e) {
+    console.warn('Failed to save favorite cards to localStorage', e);
+  }
+}
+
+function loadFavoriteCardsFromStorage(activeFavIds: number[]): Record<number, YugiohCard> {
+  const favSet = new Set(activeFavIds);
+  const prunedMap: Record<number, YugiohCard> = {};
+  if (favSet.size === 0) {
+    // Clean up any stale bloated map in localStorage when no favorites are active
+    try {
+      localStorage.removeItem(FAV_CARDS_STORAGE_KEY);
+    } catch {
+      // ignore storage errors
+    }
+    return prunedMap;
+  }
+
   try {
     const raw = localStorage.getItem(FAV_CARDS_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed === 'object') {
-        Object.assign(map, parsed);
+        for (const id of favSet) {
+          if (parsed[id]) {
+            prunedMap[id] = normalizeCard(parsed[id]);
+          }
+        }
       }
     }
   } catch (e) {
     console.warn('Failed to load favorite cards from localStorage', e);
   }
-  return map;
-}
 
-function saveFavoriteCardsToStorage(cardsMap: Record<number, YugiohCard>) {
-  try {
-    localStorage.setItem(FAV_CARDS_STORAGE_KEY, JSON.stringify(cardsMap));
-  } catch (e) {
-    console.warn('Failed to save favorite cards to localStorage', e);
+  // Resolve any missing favorite from fallback cards if available
+  for (const id of favSet) {
+    if (!prunedMap[id]) {
+      const fb = FALLBACK_CARDS.find((c) => c.id === id);
+      if (fb) {
+        prunedMap[id] = normalizeCard(fb);
+      }
+    }
   }
+
+  // Replace localStorage with the strictly pruned & slimmed map
+  saveFavoriteCardsToStorage(prunedMap, activeFavIds);
+  return prunedMap;
 }
 
 interface HistoryState {
@@ -64,12 +105,13 @@ interface HistoryState {
   isQuickDrawing: boolean;
 }
 
-const initialAce = INITIAL_ACE_CARDS[Math.floor(Math.random() * INITIAL_ACE_CARDS.length)];
+const initialAce = normalizeCard(INITIAL_START_CARD);
+const initialFavorites = loadFavoritesFromStorage();
 
 const initialState: HistoryState = {
   history: [initialAce],
-  favorites: loadFavoritesFromStorage(),
-  favoriteCards: loadFavoriteCardsFromStorage(),
+  favorites: initialFavorites,
+  favoriteCards: loadFavoriteCardsFromStorage(initialFavorites),
   isHistoryOpen: false,
   isFavoritesOpen: false,
   isQuickDrawing: false
@@ -80,13 +122,19 @@ export const historySlice = createSlice({
   initialState,
   reducers: {
     addCardToHistory: (state, action: PayloadAction<YugiohCard>) => {
-      const card = action.payload;
+      const card = normalizeCard(action.payload);
       if (state.history.length > 0 && state.history[0].id === card.id) {
         return;
       }
-      state.history = [card, ...state.history.slice(0, MAX_HISTORY - 1)];
-      // Also cache in favoriteCards map in case it gets favorited
-      state.favoriteCards[card.id] = card;
+      // Promote position to top of recent history instead of duplicating
+      const remainingHistory = state.history.filter((c) => c.id !== card.id);
+      state.history = [card, ...remainingHistory.slice(0, MAX_HISTORY - 1)];
+
+      // Only update favoriteCards if this card is actually favorited
+      if (state.favorites.includes(card.id)) {
+        state.favoriteCards[card.id] = card;
+        saveFavoriteCardsToStorage(state.favoriteCards, state.favorites);
+      }
     },
     clearHistory: (state) => {
       state.history = [];
@@ -100,28 +148,43 @@ export const historySlice = createSlice({
 
       if (state.favorites.includes(cardId)) {
         state.favorites = state.favorites.filter((id) => id !== cardId);
+        delete state.favoriteCards[cardId];
       } else {
+        if (state.favorites.length >= MAX_FAVORITES) {
+          const evictedId = state.favorites.shift();
+          if (evictedId !== undefined) {
+            delete state.favoriteCards[evictedId];
+          }
+        }
         state.favorites.push(cardId);
         if (cardObj) {
-          state.favoriteCards[cardId] = cardObj;
+          state.favoriteCards[cardId] = normalizeCard(cardObj);
         } else if (!state.favoriteCards[cardId]) {
           const inHist = state.history.find((c) => c.id === cardId);
           if (inHist) {
-            state.favoriteCards[cardId] = inHist;
+            state.favoriteCards[cardId] = normalizeCard(inHist);
           }
         }
       }
       saveFavoritesToStorage(state.favorites);
-      saveFavoriteCardsToStorage(state.favoriteCards);
+      saveFavoriteCardsToStorage(state.favoriteCards, state.favorites);
     },
     removeFavorite: (state, action: PayloadAction<number>) => {
       const cardId = action.payload;
       state.favorites = state.favorites.filter((id) => id !== cardId);
+      delete state.favoriteCards[cardId];
       saveFavoritesToStorage(state.favorites);
+      saveFavoriteCardsToStorage(state.favoriteCards, state.favorites);
     },
     clearFavorites: (state) => {
       state.favorites = [];
+      state.favoriteCards = {};
       saveFavoritesToStorage([]);
+      try {
+        localStorage.removeItem(FAV_CARDS_STORAGE_KEY);
+      } catch {
+        // ignore storage errors
+      }
     },
     setIsHistoryOpen: (state, action: PayloadAction<boolean>) => {
       state.isHistoryOpen = action.payload;

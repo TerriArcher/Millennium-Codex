@@ -1,27 +1,32 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { YugiohCard } from '../../types/card';
-import { INITIAL_ACE_CARDS } from '../../data/fallbackCards';
-
-const MAX_CACHED_CARDS = 100;
+import { INITIAL_START_CARD } from '../../data/fallbackCards';
+import { normalizeCard } from '../../services/ygoprodeckApi';
 
 interface CardsState {
   currentCard: YugiohCard;
-  cardEntities: Record<number, YugiohCard>;
-  entityOrder: number[];
   totalMatches?: number;
   isLoading: boolean;
   error: string | null;
+  isMatchingSheetOpen: boolean;
+  matchingCards: YugiohCard[];
+  isMatchingLoading: boolean;
+  drawCount: number;
+  isCardAnimating: boolean;
 }
 
-const initialCard = INITIAL_ACE_CARDS[Math.floor(Math.random() * INITIAL_ACE_CARDS.length)];
+const initialCard = normalizeCard(INITIAL_START_CARD);
 
 const initialState: CardsState = {
   currentCard: initialCard,
-  cardEntities: { [initialCard.id]: initialCard },
-  entityOrder: [initialCard.id],
-  totalMatches: undefined,
+  totalMatches: 13000,
   isLoading: false,
-  error: null
+  error: null,
+  isMatchingSheetOpen: false,
+  matchingCards: [],
+  isMatchingLoading: false,
+  drawCount: 0,
+  isCardAnimating: false
 };
 
 export const cardsSlice = createSlice({
@@ -29,25 +34,8 @@ export const cardsSlice = createSlice({
   initialState,
   reducers: {
     setCurrentCard: (state, action: PayloadAction<YugiohCard>) => {
-      const card = action.payload;
-      state.currentCard = card;
+      state.currentCard = normalizeCard(action.payload);
       state.error = null;
-
-      // LRU cache management
-      if (!state.cardEntities[card.id]) {
-        if (state.entityOrder.length >= MAX_CACHED_CARDS) {
-          const oldestId = state.entityOrder.shift();
-          if (oldestId) {
-            delete state.cardEntities[oldestId];
-          }
-        }
-        state.cardEntities[card.id] = card;
-        state.entityOrder.push(card.id);
-      } else {
-        // Move to end of LRU list
-        state.entityOrder = state.entityOrder.filter((id) => id !== card.id);
-        state.entityOrder.push(card.id);
-      }
     },
     setTotalMatches: (state, action: PayloadAction<number | undefined>) => {
       state.totalMatches = action.payload;
@@ -58,9 +46,38 @@ export const cardsSlice = createSlice({
     setCardError: (state, action: PayloadAction<string | null>) => {
       state.error = action.payload;
       state.isLoading = false;
+      if (action.payload) {
+        state.isCardAnimating = false;
+      }
+    },
+    setIsMatchingSheetOpen: (state, action: PayloadAction<boolean>) => {
+      state.isMatchingSheetOpen = action.payload;
+    },
+    setMatchingCards: (state, action: PayloadAction<YugiohCard[]>) => {
+      state.matchingCards = action.payload;
+    },
+    setIsMatchingLoading: (state, action: PayloadAction<boolean>) => {
+      state.isMatchingLoading = action.payload;
+    },
+    recordNewDraw: (state) => {
+      state.drawCount += 1;
+      state.isCardAnimating = true;
+    },
+    setCardAnimating: (state, action: PayloadAction<boolean>) => {
+      state.isCardAnimating = action.payload;
     }
   }
 });
 
-export const { setCurrentCard, setTotalMatches, setCardLoading, setCardError } = cardsSlice.actions;
+export const {
+  setCurrentCard,
+  setTotalMatches,
+  setCardLoading,
+  setCardError,
+  setIsMatchingSheetOpen,
+  setMatchingCards,
+  setIsMatchingLoading,
+  recordNewDraw,
+  setCardAnimating
+} = cardsSlice.actions;
 export default cardsSlice.reducer;

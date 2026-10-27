@@ -1,16 +1,27 @@
-import React, { useEffect } from 'react';
-import { CardFilterState } from '../types/card';
+import React, { useState, useEffect } from 'react';
+import { YugiohCard, CardFilterState } from '../types/card';
 import { FilterBar } from '../components/FilterBar';
 import { CardDisplay } from '../components/CardDisplay';
-import { FALLBACK_CARDS, INITIAL_ACE_CARDS } from '../data/fallbackCards';
-import { fetchRandomCardFromApi, filterFallbackCards } from '../services/ygoprodeckApi';
+import { Toast } from '../components/Toast';
+import { FALLBACK_CARDS, INITIAL_START_CARD } from '../data/fallbackCards';
+import {
+  fetchRandomCardFromApi,
+  filterFallbackCards,
+  getAllMatchingCards,
+  getMatchingCardsCount,
+  warmRandomCardQueue
+} from '../services/ygoprodeckApi';
 import { store } from '../store';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import {
   setCurrentCard,
   setTotalMatches,
   setCardLoading,
-  setCardError
+  setCardError,
+  setIsMatchingSheetOpen,
+  setMatchingCards,
+  setIsMatchingLoading,
+  recordNewDraw
 } from '../store/slices/cardsSlice';
 import { setAllFilters, resetFilters } from '../store/slices/filtersSlice';
 import { addCardToHistory } from '../store/slices/historySlice';
@@ -21,12 +32,28 @@ export const CardRandomizerPage: React.FC = () => {
   const dispatch = useAppDispatch();
   const filters = useAppSelector((state) => state.filters);
   const currentCard = useAppSelector((state) => state.cards.currentCard);
+  const history = useAppSelector((state) => state.history.history);
   const isLoading = useAppSelector((state) => state.cards.isLoading);
+  const isQuickDrawing = useAppSelector((state) => state.history.isQuickDrawing);
+  const isCardAnimating = useAppSelector((state) => state.cards.isCardAnimating);
+  const isFetchingCard = isLoading || isQuickDrawing;
+  const isDrawDisabled = isFetchingCard || isCardAnimating;
   const totalMatches = useAppSelector((state) => state.cards.totalMatches);
   const errorMsg = useAppSelector((state) => state.cards.error);
 
-  // Fetch a random card directly from the YGOPRODeck API, checking active criteria first
+  // Cycle reset toast notification
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Fetch a random card from the prefetch queue or bounded filter cache
   const fetchRandomCard = async (appliedFilters?: CardFilterState) => {
+    const state = store.getState();
+    if (
+      state.cards.isLoading ||
+      state.history.isQuickDrawing ||
+      state.cards.isCardAnimating
+    ) {
+      return;
+    }
     dispatch(setCardLoading(true));
     dispatch(setCardError(null));
 
@@ -41,17 +68,26 @@ export const CardRandomizerPage: React.FC = () => {
         if (currentCard && data.card.id === currentCard.id && data.totalMatches > 1) {
           const retryData = await fetchRandomCardFromApi(activeFilters, currentCard.id);
           if (retryData.card) {
+            dispatch(recordNewDraw());
             dispatch(setCurrentCard(retryData.card));
             dispatch(setTotalMatches(retryData.totalMatches));
             dispatch(addCardToHistory(retryData.card));
+            if (retryData.isCycleReset) {
+              setToastMessage('All matching cards drawn! Starting a new cycle.');
+            }
             dispatch(setCardLoading(false));
             return;
           }
         }
 
+        dispatch(recordNewDraw());
         dispatch(setCurrentCard(data.card));
         dispatch(setTotalMatches(data.totalMatches));
         dispatch(addCardToHistory(data.card));
+
+        if (data.isCycleReset) {
+          setToastMessage('All matching cards drawn! Starting a new cycle.');
+        }
       }
     } catch (err: any) {
       if (err?.status === 404) {
@@ -66,6 +102,7 @@ export const CardRandomizerPage: React.FC = () => {
         pool = pool.filter((c) => c.id !== currentCard.id);
       }
       const fallback = pool[Math.floor(Math.random() * pool.length)];
+      dispatch(recordNewDraw());
       dispatch(setCurrentCard(fallback));
       dispatch(addCardToHistory(fallback));
     } finally {
@@ -73,14 +110,78 @@ export const CardRandomizerPage: React.FC = () => {
     }
   };
 
-  // Initial draw if no card is present
+  // Initial draw if no card is present, plus warm the random prefetch queue
   useEffect(() => {
     if (!currentCard) {
-      const initial = INITIAL_ACE_CARDS[Math.floor(Math.random() * INITIAL_ACE_CARDS.length)];
-      dispatch(setCurrentCard(initial));
-      dispatch(addCardToHistory(initial));
+      dispatch(setCurrentCard(INITIAL_START_CARD));
+      dispatch(addCardToHistory(INITIAL_START_CARD));
     }
+    warmRandomCardQueue(currentCard?.id || INITIAL_START_CARD.id);
   }, []);
+
+  // Update total matching count when filters change, debouncing text inputs by 300ms to avoid per-keystroke API calls
+  useEffect(() => {
+    let cancelled = false;
+    const hasAnyFilter = Boolean(
+      filters.type ||
+        filters.superType ||
+        filters.scale !== undefined ||
+        filters.archetype ||
+        filters.attribute ||
+        filters.level !== undefined ||
+        filters.race ||
+        filters.atk !== undefined ||
+        filters.def !== undefined ||
+        filters.keyword
+    );
+
+    if (!hasAnyFilter) {
+      dispatch(setTotalMatches(undefined));
+      return;
+    }
+
+    const hasTextFilter = Boolean(filters.archetype || filters.keyword);
+    const debounceMs = hasTextFilter ? 300 : 0;
+
+    const timer = window.setTimeout(() => {
+      getMatchingCardsCount(filters).then((count) => {
+        if (!cancelled) {
+          dispatch(setTotalMatches(count));
+        }
+      });
+    }, debounceMs);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [filters, dispatch]);
+
+  // Open the bottom sheet and fetch all matching cards
+  const handleOpenMatchingCards = async () => {
+    dispatch(setIsMatchingSheetOpen(true));
+    dispatch(setIsMatchingLoading(true));
+    try {
+      const allCards = await getAllMatchingCards(filters);
+      dispatch(setMatchingCards(allCards));
+    } catch (err) {
+      console.warn('Failed to load matching cards for sheet:', err);
+      dispatch(setMatchingCards([]));
+    } finally {
+      dispatch(setIsMatchingLoading(false));
+    }
+  };
+
+  // Card selection from bottom sheet or direct promotion
+  const handleSelectCard = (card: YugiohCard) => {
+    dispatch(setCurrentCard(card));
+    dispatch(addCardToHistory(card));
+  };
+
+  // Browsing history through the carousel without altering chronological history stack
+  const handleBrowseHistory = (card: YugiohCard) => {
+    dispatch(setCurrentCard(card));
+  };
 
   // Chained Exploration Handler
   const handleExploreStat = (statFilter: {
@@ -94,6 +195,14 @@ export const CardRandomizerPage: React.FC = () => {
     atk?: number;
     def?: number;
   }) => {
+    const state = store.getState();
+    if (
+      state.cards.isLoading ||
+      state.history.isQuickDrawing ||
+      state.cards.isCardAnimating
+    ) {
+      return;
+    }
     const updatedFilters: CardFilterState = {
       ...filters,
       ...statFilter
@@ -110,6 +219,13 @@ export const CardRandomizerPage: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+      {/* Toast Notification */}
+      <Toast
+        isVisible={Boolean(toastMessage)}
+        message={toastMessage || ''}
+        onClose={() => setToastMessage(null)}
+      />
+
       {/* Hero Intro */}
       <div className="text-center max-w-2xl mx-auto mb-8">
         <h1 className="text-2xl sm:text-4xl font-extrabold font-display tracking-tight text-white mb-2">
@@ -128,7 +244,8 @@ export const CardRandomizerPage: React.FC = () => {
         }}
         onDrawRandom={() => fetchRandomCard()}
         onResetFilters={handleResetFilters}
-        isLoading={isLoading}
+        onOpenMatchingCards={handleOpenMatchingCards}
+        isLoading={isDrawDisabled}
         totalMatches={totalMatches}
       />
 
@@ -148,13 +265,15 @@ export const CardRandomizerPage: React.FC = () => {
         </div>
       )}
 
-      {/* Card Showcase Area */}
+      {/* Card Showcase Area with Integrated 3D Perspective Carousel */}
       {currentCard && (
         <div className="relative">
           <CardDisplay
             card={currentCard}
-            onExploreStat={handleExploreStat}
-            isLoading={isLoading}
+            onFilterNotification={(msg) => setToastMessage(msg)}
+            isLoading={isFetchingCard}
+            history={history}
+            onSelectCard={handleBrowseHistory}
           />
         </div>
       )}
