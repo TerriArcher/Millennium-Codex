@@ -1,6 +1,6 @@
 {
-  "summary":  "Updated implementation plan adding universal desktop and mobile browser Back button support (via a stack-aware History API hook) to close any open modal, sheet, or drawer in LIFO order instead of navigating away from the page.",
-  "updatedAt":  "2026-10-30T19:53:16.639848345Z",
+  "summary":  "Implementation plan to configure Vercel Serverless Functions for all backend API endpoints (/api/cards/synergy, /api/cards/random, /api/cards/filters, /api/resources), update Vercel routing rules so API requests are not rewritten to index.html, align the Gemini API model selection with gemini-3.8-flash and gemini-3.1-flash-lite, and preserve curated tactical synergy fallbacks when GEMINI_API_KEY is missing or times out.",
+  "updatedAt":  "2026-10-30T20:27:23.306899161Z",
   "requestFeedback":  true,
   "userFacing":  true
 }

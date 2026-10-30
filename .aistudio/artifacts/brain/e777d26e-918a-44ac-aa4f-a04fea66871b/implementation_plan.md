@@ -1,41 +1,85 @@
-# UI, Modal Back Navigation & Interaction Refinements Plan
+# Vercel Serverless API & Gemini Synergy Deployment Plan
 
-## Overview
-We will implement seven targeted improvements across the application to streamline card inspection, filter ergonomics, mobile/tablet responsiveness, and browser/mobile back-button modal dismissal:
+Configure full cross-platform deployment compatibility so the Yu-Gi-Oh! Random Card Generator & Synergy Explorer works identically on Vercel, Node/Express hosts, and local development—ensuring AI Suggested Synergy and all card API endpoints route to serverless handlers and call the official `@google/genai` SDK models (`gemini-3.8-flash` and `gemini-3.1-flash-lite`) with automatic curated synergy fallbacks.
 
-1. **Return to Top Opacity (`src/components/ScrollToTopButton.tsx`)**
-   - Adjust the floating `"Return to top"` button opacity to **85%** (`opacity-85 hover:opacity-100`).
+## User Review & Critical Decisions
 
-2. **Relocate "View Similar Cards" Next to Card Name Box & Dynamic Card Name Sizing (`src/components/CardDisplay.tsx`)**
-   - Remove the standalone `"View Similar Cards"` button from below the card image column.
-   - Place the `"View Similar Cards"` button directly to the **right** of the Card Name box within a shared flex row (`flex items-stretch gap-2.5 w-full`).
-   - Constrain the `"View Similar Cards"` button to a compact icon + short label tile taking up **no more than 30%** of the row width (`max-w-[28%] sm:max-w-[24%] shrink-0`), while the Card Name box occupies the remaining width (`flex-1 min-w-0`).
-   - Give the Card Name box a fixed height container with wrapping text (`whitespace-normal break-words line-clamp-2`) and dynamic font-size scaling based on card name length (`text-xl sm:text-2xl` for short names, scaling down to `text-base sm:text-lg`, `text-sm sm:text-base`, or `text-xs sm:text-sm` for longer card names) so longer names wrap cleanly inside the allotted space without expanding the box height.
+- **Full Serverless Endpoint Coverage (Confirmed)**: All backend API endpoints (`/api/cards/synergy`, `/api/cards/random`, `/api/cards/filters`, and `/api/resources`) will be exposed as Vercel Serverless Functions alongside the existing Express server so both Vercel and Node/container platforms work out of the box.
+- **Automatic Tactical Synergy Fallback (Confirmed)**: When `GEMINI_API_KEY` is not configured in the hosting environment or if the Gemini API request times out, `/api/cards/synergy` will automatically return curated tactical synergy fallback cards (`buildFallbackSynergySuggestions`) so the "AI Suggested" tab always populates cleanly.
+- **Required Vercel Environment Variable Setup**: To enable live Gemini AI synergy reasoning on Vercel, add `GEMINI_API_KEY` in **Vercel Dashboard → Project Settings → Environment Variables** (enabled for Production, Preview, and Development) and redeploy.
 
-3. **Card Preview Modal in History & Favorites Drawers (`src/components/HistoryDrawer.tsx`, `src/components/FavoritesDrawer.tsx`)**
-   - Integrate `CardPreviewModal` into both `HistoryDrawer` and `FavoritesDrawer`.
-   - Clicking a card row opens `CardPreviewModal` for that card while keeping the right-hand arrow button (`ArrowRight`) as a direct 1-click card selector.
-   - Inside the preview modal:
-     - Clicking **Select Card** selects the card and closes both the preview modal and the parent drawer.
-     - Clicking **Similar Cards** dispatches `openSimilarCardsForCard(selected)`, closes the preview modal and drawer, and opens the Similar Cards sheet for that card.
+---
 
-4. **Seamless "Clear Filters" Integration (`src/components/FilterBar.tsx`)**
-   - Keep `More Filters`, `Draw Card`, and `Clear Filters` aligned on a single horizontal row (`flex-nowrap items-center gap-2 sm:gap-2.5 w-full md:w-auto`) across both mobile and desktop views.
-   - Render `Clear Filters` as a compact icon-only reset button (`RotateCcw`) on mobile viewports (`px-3 py-2.5`) and display the full `"Clear Filters"` label alongside the icon on `sm:` / desktop viewports (`hidden sm:inline`).
+## 1. Overview & Core Concept
 
-5. **Responsive Button Sizing in Similar Cards Header (`src/components/RelevantCardsSheet.tsx`)**
-   - Refine the `"Include Archetypal cards"` and `"Include AI Suggested Synergies"` toggle buttons for mobile and tablet viewports using compact padding (`px-2 py-1 sm:px-2.5 sm:py-1.5`), responsive typography (`text-[11px] sm:text-xs`), and concise mobile labels (`Archetypal` / `AI Synergies` on small screens, expanding to `Include Archetypal cards` / `Include AI Suggested Synergies` on larger screens) so both buttons fit cleanly without crowding the sheet header.
+When deployed to Vercel, a Vite application serves static frontend assets from the build output directory while routing `/api/*` requests to serverless functions. Previously, two issues prevented AI Suggested Synergy from working on Vercel:
+1. **SPA Catch-All Rewrite Intercepting API Calls**: The routing configuration rewrote every path (`/(.*)`) to `/index.html`, causing `POST /api/cards/synergy` and `GET /api/cards/*` requests on Vercel to return the HTML entrypoint instead of JSON from the backend.
+2. **Express-Only Backend Mounting & Model Alias Update**: The API routes were only mounted inside the standalone Express server (`server.ts`) rather than exported for Vercel's serverless runtime, and the Gemini model list used an older preview identifier with `ThinkingLevel.MINIMAL`.
 
-6. **Card Preview Modal Header & Round Favorite Heart (`src/components/CardPreviewModal.tsx`)**
-   - Remove the top-right `✕` close button and top-bar rectangular favorite button from the top banner, leaving only the `← Back` button in the top banner.
-   - Relocate the Favorite Heart button next to the card name in the right-hand details column as a circular button (`rounded-full w-9 h-9 flex items-center justify-center`).
+This plan decouples the backend API logic into shared, runtime-agnostic handlers that are mounted by both Express (`server.ts`) and Vercel's `/api` serverless runtime, updates the routing rules so `/api/*` requests never get rewritten to `/index.html`, and configures `@google/genai` to use `gemini-3.8-flash` (`ThinkingLevel.LOW`) and `gemini-3.1-flash-lite` (`ThinkingLevel.MINIMAL`).
 
-7. **Universal Desktop & Mobile Back Button Modal Dismissal (`src/hooks/useModalBackHandler.ts`)**
-   - Create a centralized, stack-aware History API hook (`useModalBackHandler`) and wire it into every modal, sheet, and drawer in the app:
-     - `CardPreviewModal`
-     - `RelevantCardsSheet` (Similar Cards)
-     - `MatchingCardsSheet` (All Matching Cards)
-     - `HistoryDrawer` (Draw History)
-     - `FavoritesDrawer` (Favorites)
-     - Full-size Card Artwork Lightbox (`CardDisplay.tsx`)
-   - Pressing the browser Back arrow on desktop or the hardware/gesture Back button on mobile will always close only the topmost open modal/sheet/drawer (e.g., closing `CardPreviewModal` first while keeping the parent `Similar Cards` / `Matching Cards` / `History` / `Favorites` view open, and closing the parent sheet on the next Back press) without navigating away from the page.
+---
+
+## 2. User Experience & Visual Design
+
+- **Seamless AI Suggested Synergy Tab**: Opening the **Similar Cards** drawer and switching to **AI Suggested** will invoke `POST /api/cards/synergy`, returning 6 to 8 tactical synergy cards with detailed 1-to-2 sentence synergy reasoning badges and role tags (`Combo Extender`, `Searcher / Starter`, `Boss / Payoff`, `Protection / Disruption`, `Engine / Support`).
+- **Zero-Downtime Fallback Resilience**: If a deployment environment lacks `GEMINI_API_KEY` or experiences upstream latency, the endpoint transparently responds with curated competitive staple and attribute/race-matched tactical cards so players never encounter an empty drawer or raw error screen.
+- **Consistent Multi-Platform Card Drawing & Filtering**: Random draws (`/api/cards/random`), dynamic filter catalogs (`/api/cards/filters`), and external duel links (`/api/resources`) respond with low-latency cached data on Vercel just as they do in local development.
+
+---
+
+## 3. Key Product Decisions & Trade-Offs
+
+- **Shared Express + Vercel Handler Architecture**: Rather than maintaining duplicate logic between local Express development and Vercel Serverless Functions, a unified API router/handler module will power both `server.ts` and the Vercel `/api` entry point. This guarantees zero drift between environments.
+- **Production-Ready Gemini 3 Model Selection**:
+  - Primary model: `gemini-3.8-flash` configured with `ThinkingLevel.LOW` and structured JSON schema output (`responseMimeType: "application/json"`).
+  - Fast fallback model: `gemini-3.1-flash-lite` configured with `ThinkingLevel.MINIMAL` for sub-second recovery if the primary model is rate-limited or unavailable.
+  - Curated deterministic fallback: `buildFallbackSynergySuggestions` when no key is present or both models fail.
+- **Explicit API Rewrite Exclusion in Vercel Configuration**: Only non-API paths (`/((?!api/).*)`) will rewrite to `/index.html`, allowing `/api/cards/synergy`, `/api/cards/random`, `/api/cards/filters`, and `/api/resources` to hit the serverless backend directly.
+
+---
+
+## 4. Technical Architecture & Data Strategy
+
+```
++-------------------------------------------------------------------------+
+|                        React Client (Browser UI)                        |
+|   RelevantCardsSheet ("AI Suggested")  |  FilterBar / Random Card Draw  |
++-------------------+------------------------------------+----------------+
+                    | POST /api/cards/synergy            | GET /api/cards/random
+                    |                                    | GET /api/cards/filters
+                    v                                    v GET /api/resources
++-------------------------------------------------------------------------+
+|                     Platform Routing Layer                              |
+|  - Vercel: vercel.json routes /api/* -> Serverless Function Runtime     |
+|            and /((?!api/).*) -> /index.html                             |
+|  - Node / Container / Local: Express server.ts mounts /api/* directly   |
++------------------------------------+------------------------------------+
+                                     |
+                                     v
++-------------------------------------------------------------------------+
+|                  Unified Backend API Controller                         |
+|  - In-Memory YGOPRODeck Card & Pricing Cache (1-Hour TTL)               |
+|  - /api/cards/random   (Filtered draw + weighted pool selection)        |
+|  - /api/cards/filters  (Archetypes, Races, Sets, Banlist catalogs)      |
+|  - /api/resources      (Curated TCG tools & deckbuilder directory)      |
+|  - /api/cards/synergy  (AI Tactical Synergy Engine)                     |
++-----------------+--------------------------------------+----------------+
+                  |                                      |
+                  v (If GEMINI_API_KEY set)              v (Missing key / timeout)
++-----------------------------------+  +----------------------------------+
+|   @google/genai Server SDK        |  | Curated Tactical Synergy Engine  |
+| 1. gemini-3.8-flash (LOW thinking)|  | - Attribute / Race / Type match  |
+| 2. gemini-3.1-flash-lite (MINIMAL)|  | - Competitive Hand Traps & Staples|
++-----------------+-----------------+  +-----------------+----------------+
+                  |                                      |
+                  +------------------+-------------------+
+                                     |
+                                     v
+               Resolved YuGiOhCard[] + Synergy Reason & Category
+```
+
+### Environment Variables Checklist for External Hosting (Vercel / Render / Railway / Cloud Run)
+| Variable Name | Scope | Purpose |
+| :--- | :--- | :--- |
+| `GEMINI_API_KEY` | Server-side only | Authenticates `@google/genai` requests in `/api/cards/synergy`. Never exposed with `VITE_` prefix to the browser. |

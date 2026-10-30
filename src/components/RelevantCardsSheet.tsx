@@ -72,6 +72,8 @@ export const RelevantCardsSheet: React.FC<RelevantCardsSheetProps> = ({
 
   const [shouldRender, setShouldRender] = useState(isOpen);
   const [isVisible, setIsVisible] = useState(false);
+  const [isEntranceComplete, setIsEntranceComplete] = useState(false);
+  const transitionTimerRef = useRef<number | null>(null);
 
   // Keep latest activeCard in a ref so effects keyed on activeCard.id don't re-run on parent re-renders
   const activeCardRef = useRef<YugiohCard>(activeCard);
@@ -80,21 +82,32 @@ export const RelevantCardsSheet: React.FC<RelevantCardsSheetProps> = ({
   // Support desktop browser back arrow & mobile back button
   useModalBackHandler(isOpen, onClose);
 
-  // Animate top-down drawer entrance and exit
+  // Animate top-down drawer entrance and exit, marking entrance complete only after the 300ms slide-down finishes
   useEffect(() => {
     let raf1: number;
     let raf2: number;
     let timer: number;
+    let entranceTimer: number;
+
+    if (transitionTimerRef.current !== null) {
+      window.clearTimeout(transitionTimerRef.current);
+      transitionTimerRef.current = null;
+    }
 
     if (isOpen) {
       setShouldRender(true);
+      setIsEntranceComplete(false);
       raf1 = window.requestAnimationFrame(() => {
         raf2 = window.requestAnimationFrame(() => {
           setIsVisible(true);
+          entranceTimer = window.setTimeout(() => {
+            setIsEntranceComplete(true);
+          }, 320);
         });
       });
     } else {
       setIsVisible(false);
+      setIsEntranceComplete(false);
       setHoveredCard(null);
       setHoveredRect(null);
       setPreviewItem(null);
@@ -107,8 +120,18 @@ export const RelevantCardsSheet: React.FC<RelevantCardsSheetProps> = ({
       window.cancelAnimationFrame(raf1);
       window.cancelAnimationFrame(raf2);
       window.clearTimeout(timer);
+      window.clearTimeout(entranceTimer);
     };
   }, [isOpen]);
+
+  // Cleanup any transition timer on unmount
+  useEffect(() => {
+    return () => {
+      if (transitionTimerRef.current !== null) {
+        window.clearTimeout(transitionTimerRef.current);
+      }
+    };
+  }, []);
 
   // Close on Escape key (only when preview modal is not open)
   useEffect(() => {
@@ -156,10 +179,14 @@ export const RelevantCardsSheet: React.FC<RelevantCardsSheetProps> = ({
     };
   }, [isOpen, activeCard.id, includeArchetype, poolRefreshSeed]);
 
-  // ONLY call Gemini AI when the sheet is open AND "Include AI Suggested Synergies" is checked
+  // ONLY call Gemini AI when the sheet is open, its modal animation has completed, AND "Include AI Suggested Synergies" is checked
   useEffect(() => {
     if (!isOpen || !includeAiSynergies) {
       setIsLoadingAi(false);
+      return;
+    }
+
+    if (!isEntranceComplete) {
       return;
     }
 
@@ -187,7 +214,7 @@ export const RelevantCardsSheet: React.FC<RelevantCardsSheetProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [isOpen, includeAiSynergies, includeArchetype, activeCard.id, poolRefreshSeed]);
+  }, [isOpen, isEntranceComplete, includeAiSynergies, includeArchetype, activeCard.id, poolRefreshSeed]);
 
   // Combine into a single unified grid (respecting both Include Archetypal cards and Include AI Suggested Synergies)
   const unifiedRecommendations = useMemo(() => {
@@ -272,6 +299,11 @@ export const RelevantCardsSheet: React.FC<RelevantCardsSheetProps> = ({
 
       {/* Top-Down Slide-In / Slide-Out Window */}
       <div
+        onTransitionEnd={(e) => {
+          if (e.target === e.currentTarget && isOpen && isVisible) {
+            setIsEntranceComplete(true);
+          }
+        }}
         className={`relative z-10 w-full max-w-7xl mx-auto bg-slate-900 border-b border-slate-800 rounded-b-2xl shadow-2xl flex flex-col max-h-[86vh] sm:max-h-[82vh] transform transition-transform duration-300 ease-in-out ${
           isVisible ? 'translate-y-0' : '-translate-y-full'
         }`}
@@ -684,7 +716,15 @@ export const RelevantCardsSheet: React.FC<RelevantCardsSheetProps> = ({
         }}
         onViewSimilarCards={(selected) => {
           setPreviewItem(null);
+          setIsEntranceComplete(false);
           dispatch(setSimilarTargetCard(selected));
+          if (transitionTimerRef.current !== null) {
+            window.clearTimeout(transitionTimerRef.current);
+          }
+          transitionTimerRef.current = window.setTimeout(() => {
+            setIsEntranceComplete(true);
+            transitionTimerRef.current = null;
+          }, 220);
         }}
       />
     </div>

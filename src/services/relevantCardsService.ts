@@ -343,11 +343,15 @@ export async function getAiSuggestedRelevantCards(
   if (!results) {
     const response = await fetch('/api/cards/synergy', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json'
+      },
       body: JSON.stringify({ card, excludeNames })
     });
 
-    if (!response.ok) {
+    const contentType = response.headers.get('content-type') || '';
+    if (!response.ok || !contentType.includes('application/json')) {
       throw new Error('Failed to fetch AI synergy suggestions');
     }
 

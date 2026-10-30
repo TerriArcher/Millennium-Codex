@@ -1,7 +1,23 @@
 {
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/api/cards/synergy",
+      "destination": "/api/cards/synergy"
+    },
+    {
+      "source": "/api/cards/random",
+      "destination": "/api/cards/random"
+    },
+    {
+      "source": "/api/cards/filters",
+      "destination": "/api/cards/filters"
+    },
+    {
+      "source": "/api/resources",
+      "destination": "/api/resources"
+    },
+    {
+      "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
   ]
