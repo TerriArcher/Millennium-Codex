@@ -1,7 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { YugiohCard, CardFilterState } from '../types/card';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
-import { setCardAnimating } from '../store/slices/cardsSlice';
+import {
+  setCardAnimating,
+  setIsSimilarSheetOpen,
+  setSimilarTargetCard
+} from '../store/slices/cardsSlice';
 import { setFilterField } from '../store/slices/filtersSlice';
 import { toggleFavorite } from '../store/slices/historySlice';
 import { isCardImagePreloaded, markCardImageLoaded } from '../services/ygoprodeckApi';
@@ -24,6 +28,7 @@ import {
   AlertCircle,
   X
 } from 'lucide-react';
+import { RelevantCardsSheet } from './RelevantCardsSheet';
 
 // Official card-back image from https://ygoprodeck.com/card/15961
 const CARD_BACK_IMAGE_URL = 'https://images.ygoprodeck.com/images/cards/149694341.jpg';
@@ -168,6 +173,21 @@ function detectSuperType(type?: string): string | undefined {
   return undefined;
 }
 
+// Dynamically scale card name font size based on character length so longer names wrap inside the fixed Card Name box without expanding it
+function getCardNameSizeClass(name: string): string {
+  const len = (name || '').length;
+  if (len <= 22) {
+    return 'text-lg sm:text-2xl leading-tight';
+  }
+  if (len <= 34) {
+    return 'text-base sm:text-xl leading-snug';
+  }
+  if (len <= 48) {
+    return 'text-sm sm:text-base leading-snug';
+  }
+  return 'text-xs sm:text-sm leading-tight';
+}
+
 export const CardDisplay: React.FC<CardDisplayProps> = ({
   card,
   onFilterNotification,
@@ -180,6 +200,7 @@ export const CardDisplay: React.FC<CardDisplayProps> = ({
   const favorites = useAppSelector((state) => state.history.favorites);
   const drawCount = useAppSelector((state) => state.cards.drawCount);
   const isCardAnimating = useAppSelector((state) => state.cards.isCardAnimating);
+  const isSimilarSheetOpen = useAppSelector((state) => state.cards.isSimilarSheetOpen);
   const isFavorite = favorites.includes(card.id);
 
   const [copied, setCopied] = useState(false);
@@ -1091,75 +1112,103 @@ export const CardDisplay: React.FC<CardDisplayProps> = ({
               )}
             </div>
 
-            {/* 2. Card Name Box (Expanded across full width; click to copy name, Favorites button top-right) */}
-            <div
-              onClick={handleCopyName}
-              title={copied ? 'Copied card name!' : 'Click to copy card name to clipboard'}
-              className={`group w-full flex flex-col justify-between p-3.5 rounded-xl border text-left transition-all duration-300 cursor-pointer ${
-                copied
-                  ? 'bg-emerald-950/30 border-emerald-400/70 ring-1 ring-emerald-400/30'
-                  : 'bg-slate-950/70 hover:bg-amber-950/30 border-slate-800 hover:border-amber-500/50'
-              }`}
-            >
-              <div className="flex items-start justify-between gap-2">
-                <span className="text-[11px] uppercase tracking-wider text-slate-500 group-hover:text-amber-400 font-medium flex items-center gap-1.5 transition-colors">
-                  <span>Card Name</span>
-                  {copied ? (
-                    <span className="inline-flex items-center gap-1 text-emerald-400 font-semibold normal-case tracking-normal">
-                      <Check className="w-3 h-3" />
-                      <span>Copied!</span>
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 text-[10px] text-slate-500 group-hover:text-amber-300/90 normal-case tracking-normal">
-                      <Copy className="w-3 h-3" />
-                      <span>Click to copy</span>
-                    </span>
+            {/* 2. Card Name Box + Relocated Similar Cards Button (<= 30% width on right) */}
+            <div className="flex items-stretch gap-2.5 w-full">
+              <div
+                onClick={handleCopyName}
+                title={copied ? 'Copied card name!' : 'Click to copy card name to clipboard'}
+                className={`group flex-1 min-w-0 h-[5.5rem] sm:h-[5.75rem] flex flex-col justify-between p-3 sm:p-3.5 rounded-xl border text-left transition-all duration-300 cursor-pointer overflow-hidden ${
+                  copied
+                    ? 'bg-emerald-950/30 border-emerald-400/70 ring-1 ring-emerald-400/30'
+                    : 'bg-slate-950/70 hover:bg-amber-950/30 border-slate-800 hover:border-amber-500/50'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2 shrink-0">
+                  <span className="text-[11px] uppercase tracking-wider text-slate-500 group-hover:text-amber-400 font-medium flex items-center gap-1.5 transition-colors truncate">
+                    <span>Card Name</span>
+                    {copied ? (
+                      <span className="inline-flex items-center gap-1 text-emerald-400 font-semibold normal-case tracking-normal">
+                        <Check className="w-3 h-3 shrink-0" />
+                        <span>Copied!</span>
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[10px] text-slate-500 group-hover:text-amber-300/90 normal-case tracking-normal">
+                        <Copy className="w-3 h-3 shrink-0" />
+                        <span className="hidden xs:inline">Click to copy</span>
+                      </span>
+                    )}
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleToggleFav();
+                    }}
+                    className={`p-1.5 -mt-0.5 -mr-0.5 rounded-lg transition-all duration-200 cursor-pointer shrink-0 border ${
+                      isFavorite
+                        ? 'text-red-400 hover:text-red-300 bg-red-950/50 border-red-500/40 scale-105'
+                        : 'text-slate-400 hover:text-red-400 bg-slate-900/90 hover:bg-slate-800 border-slate-800 hover:border-slate-700'
+                    }`}
+                    title={isFavorite ? 'Remove from Favorites' : 'Save to Favorites'}
+                    aria-label={isFavorite ? 'Remove from Favorites' : 'Save to Favorites'}
+                  >
+                    <Heart className={`w-3.5 h-3.5 transition-transform duration-200 ${isFavorite ? 'fill-red-400 scale-110' : ''}`} />
+                  </button>
+                </div>
+
+                <div className="mt-0.5 flex-1 flex items-center relative overflow-hidden">
+                  {exitingName !== null && (
+                    <h2
+                      aria-hidden="true"
+                      className={`absolute inset-x-0 top-1/2 -translate-y-1/2 ${getCardNameSizeClass(
+                        exitingName
+                      )} font-extrabold font-display tracking-tight text-white whitespace-normal break-words line-clamp-2 pointer-events-none ${
+                        nameCyclePhase === 'animating'
+                          ? 'transition-all duration-300 ease-in-out translate-y-full opacity-0'
+                          : 'opacity-100'
+                      }`}
+                    >
+                      {exitingName}
+                    </h2>
                   )}
-                </span>
-
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleToggleFav();
-                  }}
-                  className={`p-1.5 -mt-0.5 -mr-0.5 rounded-lg transition-all duration-200 cursor-pointer shrink-0 border ${
-                    isFavorite
-                      ? 'text-red-400 hover:text-red-300 bg-red-950/50 border-red-500/40 scale-105'
-                      : 'text-slate-400 hover:text-red-400 bg-slate-900/90 hover:bg-slate-800 border-slate-800 hover:border-slate-700'
-                  }`}
-                  title={isFavorite ? 'Remove from Favorites' : 'Save to Favorites'}
-                  aria-label={isFavorite ? 'Remove from Favorites' : 'Save to Favorites'}
-                >
-                  <Heart className={`w-3.5 h-3.5 transition-transform duration-200 ${isFavorite ? 'fill-red-400 scale-110' : ''}`} />
-                </button>
-              </div>
-
-              <div className="mt-1 relative overflow-hidden">
-                {exitingName !== null && (
                   <h2
-                    aria-hidden="true"
-                    className={`absolute inset-x-0 top-0 text-xl sm:text-2xl font-extrabold font-display tracking-tight text-white pointer-events-none ${
-                      nameCyclePhase === 'animating'
-                        ? 'transition-all duration-300 ease-in-out translate-y-full opacity-0'
-                        : 'translate-y-0 opacity-100'
+                    className={`w-full ${getCardNameSizeClass(
+                      displayedName
+                    )} font-extrabold font-display tracking-tight text-white group-hover:text-amber-300 whitespace-normal break-words line-clamp-2 ${
+                      nameCyclePhase === 'start'
+                        ? '-translate-y-full opacity-0'
+                        : nameCyclePhase === 'animating'
+                        ? 'transition-all duration-300 ease-in-out translate-y-0 opacity-100'
+                        : 'transition-colors duration-200 translate-y-0 opacity-100'
                     }`}
                   >
-                    {exitingName}
+                    {displayedName}
                   </h2>
-                )}
-                <h2
-                  className={`text-xl sm:text-2xl font-extrabold font-display tracking-tight text-white group-hover:text-amber-300 ${
-                    nameCyclePhase === 'start'
-                      ? '-translate-y-full opacity-0'
-                      : nameCyclePhase === 'animating'
-                      ? 'transition-all duration-300 ease-in-out translate-y-0 opacity-100'
-                      : 'transition-colors duration-200 translate-y-0 opacity-100'
-                  }`}
-                >
-                  {displayedName}
-                </h2>
+                </div>
               </div>
+
+              {/* Relocated View Similar Cards Button (Right of Card Name, <= 30% width) */}
+              <button
+                type="button"
+                onClick={() => {
+                  dispatch(setSimilarTargetCard(null));
+                  dispatch(setIsSimilarSheetOpen(true));
+                }}
+                title="View similar and synergistic cards"
+                aria-label="View Similar Cards"
+                className="w-[27%] sm:w-[23%] max-w-[30%] shrink-0 h-[5.5rem] sm:h-[5.75rem] px-2 py-2 rounded-xl border border-amber-500/40 hover:border-amber-400 bg-slate-950/80 hover:bg-amber-950/35 text-amber-300 hover:text-amber-200 transition-all duration-200 cursor-pointer flex flex-col items-center justify-center gap-1.5 text-center shadow-xs group/similar active:scale-98"
+              >
+                <span
+                  className="w-7 h-7 rounded-lg bg-amber-500/15 border border-amber-500/30 group-hover/similar:bg-amber-500/25 group-hover/similar:border-amber-400/60 flex items-center justify-center text-amber-400 text-sm leading-none transition-colors shrink-0"
+                  aria-hidden="true"
+                >
+                  ❖
+                </span>
+                <span className="text-[11px] sm:text-xs font-bold leading-tight tracking-tight line-clamp-2">
+                  Similar Cards
+                </span>
+              </button>
             </div>
           </div>
 
@@ -1826,14 +1875,17 @@ export const CardDisplay: React.FC<CardDisplayProps> = ({
             )}
           </div>
 
-          {/* Toggle Sets */}
+          {/* Bottom-Right Action Links: Toggle Card Sets */}
           {card.card_sets && card.card_sets.length > 0 && (
-            <button
-              onClick={() => setShowSets(!showSets)}
-              className="text-amber-400 hover:text-amber-300 underline underline-offset-2 transition-colors cursor-pointer"
-            >
-              {showSets ? 'Hide Card Sets' : `View ${card.card_sets.length} Card Sets`}
-            </button>
+            <div className="flex items-center gap-4 ml-auto">
+              <button
+                type="button"
+                onClick={() => setShowSets(!showSets)}
+                className="text-amber-400 hover:text-amber-300 underline underline-offset-2 transition-colors cursor-pointer"
+              >
+                {showSets ? 'Hide Card Sets' : `View ${card.card_sets.length} Card Sets`}
+              </button>
+            </div>
           )}
         </div>
 
@@ -1849,6 +1901,16 @@ export const CardDisplay: React.FC<CardDisplayProps> = ({
           </div>
         )}
       </div>
+
+      {/* Top-Down Similar Cards Sheet */}
+      <RelevantCardsSheet
+        isOpen={isSimilarSheetOpen}
+        onClose={() => dispatch(setIsSimilarSheetOpen(false))}
+        sourceCard={card}
+        onSelectCard={(selected) => {
+          onSelectCard?.(selected);
+        }}
+      />
     </div>
   );
 };

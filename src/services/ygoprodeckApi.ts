@@ -605,6 +605,101 @@ export async function getAllMatchingCards(filters: CardFilterState): Promise<Yug
 }
 
 /**
+ * Checks all warm in-memory client caches (queryCache, unconstrainedDrawQueue, FALLBACK_CARDS)
+ * for a card matching an exact name (case-insensitive) to avoid unnecessary network calls.
+ */
+export function findCardInWarmCache(name: string): YugiohCard | undefined {
+  const target = name.trim().toLowerCase();
+  if (!target) return undefined;
+
+  for (const entry of queryCache.values()) {
+    const found = entry.data.find((c) => c.name.toLowerCase() === target);
+    if (found) return found;
+  }
+
+  const inQueue = unconstrainedDrawQueue.find((c) => c.name.toLowerCase() === target);
+  if (inQueue) return inQueue;
+
+  const inFallback = FALLBACK_CARDS.find((c) => c.name.toLowerCase() === target);
+  if (inFallback && isPlayableCard(inFallback)) return normalizeCard(inFallback);
+
+  return undefined;
+}
+
+/**
+ * Resolves multiple card names in a single batched YGOPRODeck API request using pipe-delimited
+ * `?name=Name1|Name2|Name3`, checking warm caches first and falling back to fuzzy search if needed.
+ */
+export async function fetchCardsByNamesBatch(names: string[]): Promise<YugiohCard[]> {
+  const uniqueNames = Array.from(
+    new Set(names.map((n) => n.trim()).filter((n) => n.length >= 2))
+  );
+  if (uniqueNames.length === 0) return [];
+
+  const resolvedMap = new Map<number, YugiohCard>();
+  const missingNames: string[] = [];
+
+  for (const name of uniqueNames) {
+    const cached = findCardInWarmCache(name);
+    if (cached) {
+      resolvedMap.set(cached.id, cached);
+    } else {
+      missingNames.push(name);
+    }
+  }
+
+  if (missingNames.length === 0) {
+    return Array.from(resolvedMap.values());
+  }
+
+  // Batch up to 12 names in a single pipe-delimited request
+  const batchSlice = missingNames.slice(0, 12);
+  const pipeParam = batchSlice.join('|');
+  try {
+    const url = `${YGOPRODECK_API_URL}?name=${encodeURIComponent(pipeParam)}`;
+    const response = await fetch(url, {
+      headers: { Accept: 'application/json' }
+    });
+    if (response.ok) {
+      const json = await response.json();
+      const cards = extractAndNormalizeCards(json);
+      for (const c of cards) {
+        resolvedMap.set(c.id, c);
+      }
+    }
+  } catch (err) {
+    console.warn('Batch name lookup failed, attempting individual fuzzy fallback:', err);
+  }
+
+  // If any requested names did not match exact pipe lookup (e.g. slight punctuation difference or archetype prefix),
+  // resolve up to 3 remaining names via cached keyword/fname lookup
+  const stillMissing = batchSlice.filter(
+    (reqName) =>
+      !Array.from(resolvedMap.values()).some(
+        (c) => c.name.toLowerCase() === reqName.toLowerCase()
+      )
+  );
+
+  if (stillMissing.length > 0 && resolvedMap.size < 8) {
+    const fuzzyPromises = stillMissing.slice(0, 3).map(async (partialName) => {
+      try {
+        const { cards } = await fetchFilteredPoolWithDeduplication({ keyword: partialName });
+        const bestMatch =
+          cards.find((c) => c.name.toLowerCase() === partialName.toLowerCase()) || cards[0];
+        if (bestMatch) {
+          resolvedMap.set(bestMatch.id, bestMatch);
+        }
+      } catch {
+        // Ignore individual fuzzy lookup errors
+      }
+    });
+    await Promise.all(fuzzyPromises);
+  }
+
+  return Array.from(resolvedMap.values());
+}
+
+/**
  * Fast count of matching cards in the database for the given filters
  */
 export async function getMatchingCardsCount(filters: CardFilterState): Promise<number> {

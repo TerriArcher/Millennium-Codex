@@ -3,6 +3,10 @@ import { YugiohCard, CardFilterState } from '../types/card';
 import { X, Layers, Sparkles, Check, ArrowDownAZ, Heart } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { toggleFavorite } from '../store/slices/historySlice';
+import { openSimilarCardsForCard } from '../store/slices/cardsSlice';
+import { CardHoverTooltip } from './CardHoverTooltip';
+import { CardPreviewModal } from './CardPreviewModal';
+import { useModalBackHandler } from '../hooks/useModalBackHandler';
 
 interface MatchingCardsSheetProps {
   isOpen: boolean;
@@ -32,6 +36,11 @@ export const MatchingCardsSheet: React.FC<MatchingCardsSheetProps> = ({
   const [sortStyle, setSortStyle] = useState<SortStyle>('default');
   const [randomSeed, setRandomSeed] = useState(0);
   const [visibleCount, setVisibleCount] = useState(BATCH_SIZE);
+  const [hoveredCard, setHoveredCard] = useState<YugiohCard | null>(null);
+  const [hoveredRect, setHoveredRect] = useState<DOMRect | null>(null);
+  const [previewCard, setPreviewCard] = useState<YugiohCard | null>(null);
+
+  useModalBackHandler(isOpen, onClose);
 
   // Check if multiple card types exist in this pool
   const hasMultipleTypes = useMemo(() => {
@@ -53,16 +62,16 @@ export const MatchingCardsSheet: React.FC<MatchingCardsSheetProps> = ({
     }
   }, [hasMultipleTypes, sortStyle]);
 
-  // Close on Escape key
+  // Close on Escape key (only if preview modal is not open)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape' && !previewCard) onClose();
     };
     if (isOpen) {
       window.addEventListener('keydown', handleKeyDown);
     }
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, previewCard]);
 
   // Reset sort, shuffle seed, and batch count when sheet opens or cards change
   useEffect(() => {
@@ -70,6 +79,10 @@ export const MatchingCardsSheet: React.FC<MatchingCardsSheetProps> = ({
       setSortStyle('default');
       setRandomSeed((s) => s + 1);
       setVisibleCount(BATCH_SIZE);
+    } else {
+      setHoveredCard(null);
+      setHoveredRect(null);
+      setPreviewCard(null);
     }
   }, [isOpen, cards]);
 
@@ -154,6 +167,10 @@ export const MatchingCardsSheet: React.FC<MatchingCardsSheetProps> = ({
   ].filter(Boolean);
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    if (hoveredCard) {
+      setHoveredCard(null);
+      setHoveredRect(null);
+    }
     if (visibleCount >= sortedCards.length) return;
     const target = e.currentTarget;
     if (target.scrollHeight - target.scrollTop - target.clientHeight < 320) {
@@ -291,15 +308,25 @@ export const MatchingCardsSheet: React.FC<MatchingCardsSheetProps> = ({
                       key={card.id}
                       role="button"
                       tabIndex={0}
+                      onMouseEnter={(e) => {
+                        setHoveredCard(card);
+                        setHoveredRect(e.currentTarget.getBoundingClientRect());
+                      }}
+                      onMouseLeave={() => {
+                        setHoveredCard((prev) => (prev?.id === card.id ? null : prev));
+                        setHoveredRect(null);
+                      }}
                       onClick={() => {
-                        onSelectCard(card);
-                        onClose();
+                        setHoveredCard(null);
+                        setHoveredRect(null);
+                        setPreviewCard(card);
                       }}
                       onKeyDown={(e) => {
                         if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
                           e.preventDefault();
-                          onSelectCard(card);
-                          onClose();
+                          setHoveredCard(null);
+                          setHoveredRect(null);
+                          setPreviewCard(card);
                         }
                       }}
                       className={`group flex flex-col items-center p-2 rounded-xl text-left transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-400 ${
@@ -374,6 +401,25 @@ export const MatchingCardsSheet: React.FC<MatchingCardsSheetProps> = ({
           )}
         </div>
       </div>
+
+      {/* Desktop Floating Hover Tooltip */}
+      <CardHoverTooltip card={previewCard ? null : hoveredCard} anchorRect={hoveredRect} />
+
+      {/* Quick-Preview Window when a Card is Clicked */}
+      <CardPreviewModal
+        card={previewCard}
+        isCurrentCard={previewCard?.id === currentCardId}
+        onClose={() => setPreviewCard(null)}
+        onSelectCard={(selected) => {
+          setPreviewCard(null);
+          onSelectCard(selected);
+          onClose();
+        }}
+        onViewSimilarCards={(selected) => {
+          setPreviewCard(null);
+          dispatch(openSimilarCardsForCard(selected));
+        }}
+      />
     </div>
   );
 };

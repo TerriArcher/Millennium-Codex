@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { FALLBACK_CARDS, INITIAL_ACE_CARDS, META_RESOURCES } from './src/data/fallbackCards.ts';
 import { YugiohCard } from './src/types/card.ts';
+import { GoogleGenAI, ThinkingLevel, Type } from '@google/genai';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -527,6 +528,359 @@ async function startServer() {
       resources: list,
       totalCount: list.length
     });
+  });
+
+  // 4. Gemini AI Card Synergy Endpoint (Opt-in via "Include AI Suggested Synergies" checkbox)
+  interface AiSynergySuggestion {
+    name: string;
+    category: string;
+    reason: string;
+  }
+
+  const aiSynergyCache = new Map<string, AiSynergySuggestion[]>();
+  const MAX_AI_SYNERGY_CACHE = 200;
+
+  // Curated tactical staple/engine fallback in case all Gemini models return 503 high-demand errors
+  function buildFallbackSynergySuggestions(
+    card: Partial<YugiohCard>,
+    excludeNames: Set<string>
+  ): AiSynergySuggestion[] {
+    const typeLower = String(card.type || '').toLowerCase();
+    const attrUpper = String(card.attribute || '').toUpperCase();
+    const raceLower = String(card.race || '').toLowerCase();
+    const level = card.level;
+    const candidates: AiSynergySuggestion[] = [];
+
+    if (level === 8) {
+      candidates.push(
+        {
+          name: 'Trade-In',
+          category: 'AI Draw Engine',
+          reason: `Discards Level 8 "${card.name}" to draw 2 cards while loading the Graveyard.`
+        },
+        {
+          name: 'Number 38: Hope Harbinger Dragon Titanic Galaxy',
+          category: 'AI Rank 8 Boss',
+          reason: `High-impact Rank 8 Xyz monster easily overlaid using Level 8 monsters like "${card.name}".`
+        },
+        {
+          name: 'Dingirsu, the Orcust of the Evening Star',
+          category: 'AI Rank 8 Utility',
+          reason: `Provides non-targeting removal and destruction protection for Rank 8 setups.`
+        }
+      );
+    }
+    if (level === 7) {
+      candidates.push(
+        {
+          name: 'Sacred Sword of Seven Stars',
+          category: 'AI Draw Engine',
+          reason: `Banishes a Level 7 monster like "${card.name}" to draw 2 cards and accelerate deck cycling.`
+        },
+        {
+          name: 'Number 11: Big Eye',
+          category: 'AI Rank 7 Xyz',
+          reason: `Rank 7 Xyz play that permanently steals an opponent's monster using Level 7 materials.`
+        }
+      );
+    }
+    if (level === 4) {
+      candidates.push(
+        {
+          name: 'Time Thief Redoer',
+          category: 'AI Rank 4 Control',
+          reason: `Versatile Rank 4 Xyz monster that pairs with Level 4 extenders like "${card.name}".`
+        },
+        {
+          name: 'Bagooska the Terribly Tired Tapir',
+          category: 'AI Rank 4 Lock',
+          reason: `Defensive Rank 4 Xyz option easily summoned alongside "${card.name}".`
+        }
+      );
+    }
+    if (raceLower.includes('dragon')) {
+      candidates.push(
+        {
+          name: 'Dragon Shrine',
+          category: 'AI GY Setup',
+          reason: `Sends Dragon monsters directly from Deck to Graveyard to trigger recursion.`
+        },
+        {
+          name: 'Return of the Dragon Lords',
+          category: 'AI Revival & Shield',
+          reason: `Revives high-level Dragons from the GY and banishes itself to protect "${card.name}".`
+        },
+        {
+          name: 'Hieratic Seal of the Heavenly Spheres',
+          category: 'AI Dragon Link',
+          reason: `Tributes a Dragon to bounce an opponent's card and summon a Dragon from the Deck.`
+        }
+      );
+    }
+    if (raceLower.includes('spellcaster')) {
+      candidates.push(
+        {
+          name: 'Selene, Queen of the Master Magicians',
+          category: 'AI Link Extender',
+          reason: `Accumulates Spell Counters to Special Summon Spellcasters like "${card.name}" from GY.`
+        },
+        {
+          name: 'Magicians\' Souls',
+          category: 'AI Consistency',
+          reason: `Sends high-level Spellcasters from Deck to GY and converts extra Spells/Traps into draws.`
+        }
+      );
+    }
+    if (raceLower.includes('warrior')) {
+      candidates.push(
+        {
+          name: 'Reinforcement of the Army',
+          category: 'AI Searcher',
+          reason: `Searches Warrior combo starters and extenders to pair with "${card.name}".`
+        },
+        {
+          name: 'Isolde, Two Tales of the Noble Knights',
+          category: 'AI Warrior Link',
+          reason: `Searches a Warrior on Link Summon and Special Summons another Warrior from the Deck.`
+        }
+      );
+    }
+    if (attrUpper === 'DARK') {
+      candidates.push(
+        {
+          name: 'Allure of Darkness',
+          category: 'AI Draw Engine',
+          reason: `Draws 2 cards by banishing a DARK monster, smoothing hands built around "${card.name}".`
+        },
+        {
+          name: 'Dharc the Dark Charmer, Gloomy',
+          category: 'AI Link Climber',
+          reason: `Links using DARK monsters like "${card.name}" and revives a DARK monster from the opponent's GY.`
+        }
+      );
+    }
+    if (attrUpper === 'LIGHT') {
+      candidates.push({
+        name: 'Lyna the Light Charmer, Lustrous',
+        category: 'AI Link Climber',
+        reason: `Uses LIGHT monsters like "${card.name}" as Link material and searches LIGHT follow-up on destruction.`
+      });
+    }
+    if (typeLower.includes('spell') || typeLower.includes('trap')) {
+      candidates.push(
+        {
+          name: 'Triple Tactics Thrust',
+          category: 'AI Spell/Trap Tutor',
+          reason: `Sets or searches key Normal Spells/Traps to complement "${card.name}".`
+        },
+        {
+          name: 'Lord of the Heavenly Prison',
+          category: 'AI Backrow Shield',
+          reason: `Protects set Spells and Traps from destruction and sets a Spell/Trap directly from the Deck.`
+        }
+      );
+    }
+
+    // Universal tactical staples to ensure at least 6 suggestions
+    candidates.push(
+      {
+        name: 'Monster Reborn',
+        category: 'AI Revival Tech',
+        reason: `Extends plays by Special Summoning "${card.name}" or key combo pieces from either Graveyard.`
+      },
+      {
+        name: 'Called by the Grave',
+        category: 'AI Combo Protection',
+        reason: `Insulates "${card.name}"'s effects and summon sequences against hand traps.`
+      },
+      {
+        name: 'Infinite Impermanence',
+        category: 'AI Board Breaker',
+        reason: `Negates opposing monster effects to clear the way for "${card.name}".`
+      },
+      {
+        name: 'S:P Little Knight',
+        category: 'AI Link Utility',
+        reason: `Banishes threats on summon and temporarily banishes "${card.name}" to dodge removal.`
+      },
+      {
+        name: 'Foolish Burial',
+        category: 'AI GY Starter',
+        reason: `Sends key monsters directly from the Deck to the GY to enable graveyard synergies.`
+      },
+      {
+        name: 'Crossout Designator',
+        category: 'AI Handtrap Shield',
+        reason: `Protects high-commitment plays involving "${card.name}" from disruption.`
+      }
+    );
+
+    const selfLower = String(card.name || '').trim().toLowerCase();
+    const filtered: AiSynergySuggestion[] = [];
+    const seen = new Set<string>();
+    for (const item of candidates) {
+      const lower = item.name.toLowerCase();
+      if (lower === selfLower || excludeNames.has(lower) || seen.has(lower)) continue;
+      seen.add(lower);
+      filtered.push(item);
+      if (filtered.length >= 6) break;
+    }
+    return filtered;
+  }
+
+  app.post('/api/cards/synergy', async (req: Request, res: Response) => {
+    try {
+      const card = req.body?.card as Partial<YugiohCard> | undefined;
+      const excludeList: string[] = Array.isArray(req.body?.excludeNames)
+        ? req.body.excludeNames.map((n: any) => String(n).trim().toLowerCase())
+        : [];
+      const excludeSet = new Set<string>(excludeList);
+
+      if (!card || !card.name) {
+        return res.status(400).json({ message: 'Valid card payload is required.', suggestions: [] });
+      }
+
+      const cardId = Number(card.id) || 0;
+      const cacheKey = `${cardId}:${excludeList.sort().join('|')}`;
+      if (cardId && aiSynergyCache.has(cacheKey)) {
+        const cached = aiSynergyCache.get(cacheKey)!;
+        aiSynergyCache.delete(cacheKey);
+        aiSynergyCache.set(cacheKey, cached);
+        return res.json({ suggestions: cached, source: 'cache' });
+      }
+
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        const fallback = buildFallbackSynergySuggestions(card, excludeSet);
+        return res.json({ suggestions: fallback, source: 'fallback' });
+      }
+
+      const ai = new GoogleGenAI({
+        apiKey,
+        httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+      });
+
+      const cardSummary = [
+        `Name: ${card.name}`,
+        `Card Type: ${card.type || 'Unknown'}`,
+        card.attribute ? `Attribute: ${card.attribute}` : null,
+        card.race ? `Race/Property: ${card.race}` : null,
+        card.level !== undefined ? `Level/Rank: ${card.level}` : null,
+        card.linkval !== undefined ? `Link Rating: ${card.linkval}` : null,
+        card.scale !== undefined ? `Pendulum Scale: ${card.scale}` : null,
+        card.atk !== undefined ? `ATK: ${card.atk}` : null,
+        card.def !== undefined ? `DEF: ${card.def}` : null,
+        card.archetype ? `Archetype: ${card.archetype}` : null,
+        `Effect/Text: ${card.desc || 'None'}`
+      ]
+        .filter(Boolean)
+        .join('\n');
+
+      const excludeClause =
+        excludeList.length > 0
+          ? `\nDo NOT recommend any of these already-shown cards: ${excludeList.slice(0, 12).join(', ')}.`
+          : '';
+
+      const prompt = `You are an expert Yu-Gi-Oh! TCG deckbuilder. Given the following Yu-Gi-Oh! card, recommend 6 real, official Yu-Gi-Oh! TCG cards that have strong tactical synergy, combo potential, search/summon interaction, or engine compatibility with it.
+Do NOT recommend the card itself ("${card.name}").${excludeClause}
+Use the exact official English TCG card name for every recommended card so it can be looked up in the YGOPRODeck database.
+
+Selected Card:
+${cardSummary}`;
+
+      // Use gemini-3-flash-preview with ThinkingLevel.MINIMAL (~2.5s response) and a 5.5s timeout
+      // so a 503 high-demand spike never blocks the user's request.
+      const modelsToTry = ['gemini-3-flash-preview'];
+      let parsed: AiSynergySuggestion[] = [];
+
+      for (const modelName of modelsToTry) {
+        try {
+          const timeoutPromise = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error(`Timeout calling ${modelName}`)), 5500)
+          );
+
+          const genPromise = ai.models.generateContent({
+            model: modelName,
+            contents: prompt,
+            config: {
+              thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
+              responseMimeType: 'application/json',
+              responseSchema: {
+                type: Type.ARRAY,
+                description: 'List of 6 synergistic Yu-Gi-Oh! cards.',
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    name: {
+                      type: Type.STRING,
+                      description: 'Exact official English Yu-Gi-Oh! TCG card name.'
+                    },
+                    category: {
+                      type: Type.STRING,
+                      description:
+                        'Short 2-3 word synergy badge label (e.g., "AI Combo Piece", "AI Searcher", "AI Tech Support", "AI Boss Synergy").'
+                    },
+                    reason: {
+                      type: Type.STRING,
+                      description:
+                        'Concise 1-sentence explanation (max 110 characters) of how this card synergizes with the selected card.'
+                    }
+                  },
+                  required: ['name', 'category', 'reason']
+                }
+              }
+            }
+          });
+
+          const response = await Promise.race([genPromise, timeoutPromise]);
+          const rawText = response.text || '[]';
+          const json = JSON.parse(rawText);
+          if (Array.isArray(json) && json.length > 0) {
+            parsed = json
+              .filter(
+                (item) =>
+                  item &&
+                  typeof item.name === 'string' &&
+                  item.name.trim().toLowerCase() !== card.name!.trim().toLowerCase() &&
+                  !excludeSet.has(item.name.trim().toLowerCase())
+              )
+              .slice(0, 8)
+              .map((item) => ({
+                name: item.name.trim(),
+                category: String(item.category || 'AI Synergy').trim(),
+                reason: String(
+                  item.reason || 'Recommended by Gemini AI for tactical deck synergy.'
+                ).trim()
+              }));
+          }
+          if (parsed.length > 0) break;
+        } catch (modelErr: any) {
+          console.warn(`Model ${modelName} failed or timed out:`, modelErr?.message || modelErr);
+        }
+      }
+
+      if (parsed.length === 0) {
+        parsed = buildFallbackSynergySuggestions(card, excludeSet);
+      }
+
+      if (cardId && parsed.length > 0) {
+        if (aiSynergyCache.size >= MAX_AI_SYNERGY_CACHE) {
+          const oldestKey = aiSynergyCache.keys().next().value;
+          if (oldestKey !== undefined) aiSynergyCache.delete(oldestKey);
+        }
+        aiSynergyCache.set(cacheKey, parsed);
+      }
+
+      return res.json({ suggestions: parsed, source: 'gemini' });
+    } catch (err: any) {
+      console.error('Error in /api/cards/synergy:', err);
+      const card = req.body?.card as Partial<YugiohCard> | undefined;
+      const fallback = card ? buildFallbackSynergySuggestions(card, new Set()) : [];
+      return res.json({
+        suggestions: fallback,
+        source: 'fallback'
+      });
+    }
   });
 
   const httpServer = http.createServer(app);

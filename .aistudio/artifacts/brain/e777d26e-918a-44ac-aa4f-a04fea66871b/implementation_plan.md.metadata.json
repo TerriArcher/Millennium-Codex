@@ -1,6 +1,6 @@
 {
-  "summary":  "Revised implementation plan incorporating full-project performance, caching, storage replacement, and YGOPRODeck API call reduction optimizations alongside the Matching Cards sheet nested button DOM fix.",
-  "updatedAt":  "2026-10-27T21:37:21.524771411Z",
+  "summary":  "Updated implementation plan adding universal desktop and mobile browser Back button support (via a stack-aware History API hook) to close any open modal, sheet, or drawer in LIFO order instead of navigating away from the page.",
+  "updatedAt":  "2026-10-30T19:53:16.639848345Z",
   "requestFeedback":  true,
   "userFacing":  true
 }

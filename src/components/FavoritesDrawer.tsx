@@ -2,8 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { YugiohCard } from '../types/card';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { removeFavorite, clearFavorites } from '../store/slices/historySlice';
+import { openSimilarCardsForCard } from '../store/slices/cardsSlice';
 import { X, Heart, Trash2, ArrowRight } from 'lucide-react';
 import { FALLBACK_CARDS } from '../data/fallbackCards';
+import { CardPreviewModal } from './CardPreviewModal';
+import { useModalBackHandler } from '../hooks/useModalBackHandler';
 
 interface FavoritesDrawerProps {
   isOpen: boolean;
@@ -20,9 +23,13 @@ export const FavoritesDrawer: React.FC<FavoritesDrawerProps> = ({
   const favorites = useAppSelector((state) => state.history.favorites);
   const favoriteCardsMap = useAppSelector((state) => state.history.favoriteCards);
   const history = useAppSelector((state) => state.history.history);
+  const currentCardId = useAppSelector((state) => state.cards.currentCard?.id);
 
   const [shouldRender, setShouldRender] = useState(isOpen);
   const [isVisible, setIsVisible] = useState(false);
+  const [previewCard, setPreviewCard] = useState<YugiohCard | null>(null);
+
+  useModalBackHandler(isOpen, onClose);
 
   useEffect(() => {
     let raf1: number;
@@ -38,6 +45,7 @@ export const FavoritesDrawer: React.FC<FavoritesDrawerProps> = ({
       });
     } else {
       setIsVisible(false);
+      setPreviewCard(null);
       timer = window.setTimeout(() => {
         setShouldRender(false);
       }, 300);
@@ -49,6 +57,17 @@ export const FavoritesDrawer: React.FC<FavoritesDrawerProps> = ({
       window.clearTimeout(timer);
     };
   }, [isOpen]);
+
+  // Close on Escape key (only when preview modal is not open)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !previewCard) onClose();
+    };
+    if (isOpen) {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose, previewCard]);
 
   if (!shouldRender) return null;
 
@@ -141,10 +160,8 @@ export const FavoritesDrawer: React.FC<FavoritesDrawerProps> = ({
                   className="group p-3 bg-slate-950/80 hover:bg-slate-800/80 border border-slate-800/80 hover:border-red-500/40 rounded-xl transition-all flex items-center justify-between gap-3"
                 >
                   <div
-                    onClick={() => {
-                      onSelectCard(card);
-                      onClose();
-                    }}
+                    onClick={() => setPreviewCard(card)}
+                    title="Click to preview card details"
                     className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer"
                   >
                     <img
@@ -192,11 +209,12 @@ export const FavoritesDrawer: React.FC<FavoritesDrawerProps> = ({
                       <Trash2 className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         onSelectCard(card);
                         onClose();
                       }}
-                      title="View card"
+                      title="Select card immediately"
                       className="p-1.5 rounded-lg text-slate-500 hover:text-amber-400 hover:bg-slate-800 transition-colors cursor-pointer"
                     >
                       <ArrowRight className="w-4 h-4" />
@@ -208,6 +226,23 @@ export const FavoritesDrawer: React.FC<FavoritesDrawerProps> = ({
           )}
         </div>
       </div>
+
+      {/* Card Preview Modal */}
+      <CardPreviewModal
+        card={previewCard}
+        onClose={() => setPreviewCard(null)}
+        onSelectCard={(selected) => {
+          setPreviewCard(null);
+          onSelectCard(selected);
+          onClose();
+        }}
+        onViewSimilarCards={(selected) => {
+          setPreviewCard(null);
+          onClose();
+          dispatch(openSimilarCardsForCard(selected));
+        }}
+        isCurrentCard={Boolean(previewCard && currentCardId === previewCard.id)}
+      />
     </div>
   );
 };

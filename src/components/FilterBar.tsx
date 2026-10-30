@@ -164,10 +164,10 @@ export const FilterBar: React.FC<FilterBarProps> = ({
         </div>
 
         {/* Secondary controls and Main Draw CTA */}
-        <div className="flex flex-wrap sm:flex-nowrap items-center justify-between md:justify-end gap-2 sm:gap-2.5 w-full md:w-auto">
+        <div className="flex flex-nowrap items-center justify-between md:justify-end gap-2 sm:gap-2.5 w-full md:w-auto">
           <button
             onClick={() => setShowAdvanced(!showAdvanced)}
-            className={`px-3 sm:px-3.5 py-2.5 text-xs font-medium rounded-xl border transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer ${
+            className={`h-10 px-3 sm:px-3.5 text-xs font-medium rounded-xl border transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer shrink-0 ${
               showAdvanced || hasAnyFilter
                 ? 'bg-slate-800 border-amber-500/50 text-amber-300'
                 : 'bg-slate-950/70 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
@@ -184,7 +184,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           <button
             onClick={onDrawRandom}
             disabled={isLoading}
-            className={`flex-1 sm:flex-initial px-4 sm:px-5 py-2.5 text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-2 whitespace-nowrap disabled:bg-slate-800 disabled:from-slate-800 disabled:to-slate-800 disabled:text-slate-500 disabled:border-slate-700/80 disabled:shadow-none disabled:cursor-not-allowed disabled:pointer-events-none ${
+            className={`flex-1 sm:flex-initial h-10 px-3.5 sm:px-5 text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-2 whitespace-nowrap disabled:bg-slate-800 disabled:from-slate-800 disabled:to-slate-800 disabled:text-slate-500 disabled:border-slate-700/80 disabled:shadow-none disabled:cursor-not-allowed disabled:pointer-events-none ${
               isLoading
                 ? 'bg-slate-800 text-slate-500 border border-slate-700/80 shadow-none cursor-not-allowed pointer-events-none'
                 : 'text-slate-950 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 active:scale-98 shadow-md shadow-amber-500/20 cursor-pointer'
@@ -193,30 +193,22 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           >
             <Sparkles className={`w-4 h-4 shrink-0 ${isLoading ? 'animate-spin text-slate-500' : ''}`} />
             <span>{isLoading ? 'Drawing...' : 'Draw Card'}</span>
-            {hasAnyFilter && (
-              <span
-                className={`px-1.5 py-0.5 text-[10px] font-extrabold rounded-md ${
-                  isLoading ? 'bg-slate-700/70 text-slate-400' : 'bg-slate-950/25'
-                }`}
-              >
-                Active
-              </span>
-            )}
           </button>
 
-          {/* Clear all filters button positioned directly next to Draw Card */}
+          {/* Clear all filters button integrated seamlessly next to Draw Card (icon-only on mobile, full label on desktop) */}
           <button
             onClick={onResetFilters}
             disabled={!hasAnyFilter}
-            className={`px-3 sm:px-3.5 py-2.5 text-xs font-semibold rounded-xl border transition-all flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer ${
+            aria-label="Clear all active filters"
+            className={`h-10 px-3 sm:px-3.5 text-xs font-semibold rounded-xl border transition-all flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 ${
               hasAnyFilter
-                ? 'bg-slate-800/90 hover:bg-red-950/50 border-slate-700 hover:border-red-500/50 text-slate-300 hover:text-red-300 shadow-sm'
+                ? 'bg-slate-800/90 hover:bg-red-950/50 border-slate-700 hover:border-red-500/50 text-slate-300 hover:text-red-300 shadow-sm cursor-pointer'
                 : 'bg-slate-950/40 border-slate-800 text-slate-600 cursor-not-allowed opacity-50'
             }`}
             title="Clear all active filters"
           >
             <RotateCcw className="w-3.5 h-3.5 shrink-0" />
-            <span>Clear Filters</span>
+            <span className="hidden sm:inline">Clear Filters</span>
           </button>
         </div>
       </div>

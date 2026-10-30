@@ -11,6 +11,8 @@ interface CardsState {
   isMatchingSheetOpen: boolean;
   matchingCards: YugiohCard[];
   isMatchingLoading: boolean;
+  isSimilarSheetOpen: boolean;
+  similarTargetCard: YugiohCard | null;
   drawCount: number;
   isCardAnimating: boolean;
 }
@@ -25,6 +27,8 @@ const initialState: CardsState = {
   isMatchingSheetOpen: false,
   matchingCards: [],
   isMatchingLoading: false,
+  isSimilarSheetOpen: false,
+  similarTargetCard: null,
   drawCount: 0,
   isCardAnimating: false
 };
@@ -59,6 +63,17 @@ export const cardsSlice = createSlice({
     setIsMatchingLoading: (state, action: PayloadAction<boolean>) => {
       state.isMatchingLoading = action.payload;
     },
+    setIsSimilarSheetOpen: (state, action: PayloadAction<boolean>) => {
+      state.isSimilarSheetOpen = action.payload;
+    },
+    setSimilarTargetCard: (state, action: PayloadAction<YugiohCard | null>) => {
+      state.similarTargetCard = action.payload ? normalizeCard(action.payload) : null;
+    },
+    openSimilarCardsForCard: (state, action: PayloadAction<YugiohCard | null>) => {
+      state.similarTargetCard = action.payload ? normalizeCard(action.payload) : null;
+      state.isSimilarSheetOpen = true;
+      state.isMatchingSheetOpen = false;
+    },
     recordNewDraw: (state) => {
       state.drawCount += 1;
       state.isCardAnimating = true;
@@ -77,6 +92,9 @@ export const {
   setIsMatchingSheetOpen,
   setMatchingCards,
   setIsMatchingLoading,
+  setIsSimilarSheetOpen,
+  setSimilarTargetCard,
+  openSimilarCardsForCard,
   recordNewDraw,
   setCardAnimating
 } = cardsSlice.actions;
