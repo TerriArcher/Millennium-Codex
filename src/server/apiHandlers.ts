@@ -800,7 +800,15 @@ export async function handleCardSynergy(req: any, res: any) {
       return sendJson(res, 200, { suggestions: cached, source: 'cache' });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+    const rawApiKey =
+      process.env.GEMINI_API_KEY ||
+      process.env.VITE_GEMINI_API_KEY ||
+      process.env.GOOGLE_API_KEY ||
+      process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
+      process.env.NEXT_PUBLIC_GEMINI_API_KEY ||
+      '';
+    const apiKey = rawApiKey.trim().replace(/^["']|["']$/g, '');
+
     if (!apiKey || apiKey === 'MY_GEMINI_API_KEY') {
       const fallback = buildFallbackSynergySuggestions(card, excludeSet);
       return sendJson(res, 200, { suggestions: fallback, source: 'fallback' });
@@ -811,111 +819,132 @@ export async function handleCardSynergy(req: any, res: any) {
       httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
     });
 
+    const truncatedDesc = String(card.desc || 'None')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 280);
+
     const cardSummary = [
       `Name: ${card.name}`,
-      `Card Type: ${card.type || 'Unknown'}`,
-      card.attribute ? `Attribute: ${card.attribute}` : null,
-      card.race ? `Race/Property: ${card.race}` : null,
-      card.level !== undefined ? `Level/Rank: ${card.level}` : null,
-      card.linkval !== undefined ? `Link Rating: ${card.linkval}` : null,
-      card.scale !== undefined ? `Pendulum Scale: ${card.scale}` : null,
-      card.atk !== undefined ? `ATK: ${card.atk}` : null,
-      card.def !== undefined ? `DEF: ${card.def}` : null,
+      `Type: ${card.type || 'Unknown'}`,
+      card.attribute ? `Attr: ${card.attribute}` : null,
+      card.race ? `Race: ${card.race}` : null,
+      card.level !== undefined ? `Lv/Rank: ${card.level}` : null,
+      card.linkval !== undefined ? `Link: ${card.linkval}` : null,
+      card.scale !== undefined ? `Scale: ${card.scale}` : null,
+      card.atk !== undefined ? `ATK/DEF: ${card.atk}/${card.def ?? '?'}` : null,
       card.archetype ? `Archetype: ${card.archetype}` : null,
-      `Effect/Text: ${card.desc || 'None'}`
+      `Text: ${truncatedDesc}`
     ]
       .filter(Boolean)
-      .join('\n');
+      .join(' | ');
 
     const excludeClause =
       excludeList.length > 0
-        ? `\nDo NOT recommend any of these already-shown cards: ${excludeList.slice(0, 12).join(', ')}.`
+        ? ` Exclude: ${excludeList.slice(0, 8).join(', ')}.`
         : '';
 
-    const prompt = `You are an expert Yu-Gi-Oh! TCG deckbuilder. Given the following Yu-Gi-Oh! card, recommend 6 real, official Yu-Gi-Oh! TCG cards that have strong tactical synergy, combo potential, search/summon interaction, or engine compatibility with it.
-Do NOT recommend the card itself ("${card.name}").${excludeClause}
-Use the exact official English TCG card name for every recommended card so it can be looked up in the YGOPRODeck database.
+    const prompt = `Recommend 5 real official English Yu-Gi-Oh! TCG cards with strong combo, search, or engine synergy with "${card.name}". Do not include "${card.name}".${excludeClause}\nCard: ${cardSummary}`;
 
-Selected Card:
-${cardSummary}`;
+    const responseSchema = {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          name: {
+            type: Type.STRING,
+            description: 'Exact official English TCG card name.'
+          },
+          category: {
+            type: Type.STRING,
+            description: '2-3 word label (e.g. "AI Combo Piece", "AI Searcher").'
+          },
+          reason: {
+            type: Type.STRING,
+            description: 'Brief 1-sentence synergy reason under 85 chars.'
+          }
+        },
+        required: ['name', 'category', 'reason']
+      }
+    };
 
-    // Prioritize low-latency Flash models with ThinkingLevel.MINIMAL first for fast interactive UI response
-    const modelsToTry: Array<{ model: string; thinkingLevel: ThinkingLevel }> = [
-      { model: 'gemini-3.1-flash-lite', thinkingLevel: ThinkingLevel.MINIMAL },
-      { model: 'gemini-3-flash-preview', thinkingLevel: ThinkingLevel.MINIMAL },
-      { model: 'gemini-3.8-flash', thinkingLevel: ThinkingLevel.LOW }
+    const candidateConfigs: Array<{ model: string; thinkingConfig: Record<string, any> }> = [
+      {
+        model: 'gemini-3.1-flash-lite',
+        thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL }
+      },
+      {
+        model: 'gemini-flash-latest',
+        thinkingConfig: { thinkingBudget: 0 }
+      },
+      {
+        model: 'gemini-2.5-flash',
+        thinkingConfig: { thinkingBudget: 0 }
+      }
     ];
 
-    let parsed: AiSynergySuggestion[] = [];
+    const parseSuggestions = (rawText: string): AiSynergySuggestion[] => {
+      const cleaned = (rawText || '[]')
+        .trim()
+        .replace(/^```(?:json)?\s*/i, '')
+        .replace(/\s*```$/i, '')
+        .trim();
+      const json = JSON.parse(cleaned);
+      if (!Array.isArray(json)) return [];
+      return json
+        .filter(
+          (item) =>
+            item &&
+            typeof item.name === 'string' &&
+            item.name.trim().toLowerCase() !== card.name!.trim().toLowerCase() &&
+            !excludeSet.has(item.name.trim().toLowerCase())
+        )
+        .slice(0, 6)
+        .map((item) => ({
+          name: item.name.trim(),
+          category: String(item.category || 'AI Synergy').trim(),
+          reason: String(
+            item.reason || 'Recommended by Gemini AI for tactical deck synergy.'
+          ).trim()
+        }));
+    };
 
-    for (const { model: modelName, thinkingLevel } of modelsToTry) {
-      let timeoutId: ReturnType<typeof setTimeout> | undefined;
-      try {
+    let parsed: AiSynergySuggestion[] = [];
+    const activeTimers: Array<ReturnType<typeof setTimeout>> = [];
+
+    try {
+      const racePromises = candidateConfigs.map(async ({ model, thinkingConfig }) => {
         const timeoutPromise = new Promise<never>((_, reject) => {
-          timeoutId = setTimeout(() => reject(new Error(`Timeout calling ${modelName}`)), 10000);
+          const id = setTimeout(() => reject(new Error(`Timeout calling ${model}`)), 3200);
+          activeTimers.push(id);
         });
 
         const genPromise = ai.models.generateContent({
-          model: modelName,
+          model,
           contents: prompt,
           config: {
-            thinkingConfig: { thinkingLevel },
+            thinkingConfig,
+            temperature: 0.3,
+            maxOutputTokens: 420,
             responseMimeType: 'application/json',
-            responseSchema: {
-              type: Type.ARRAY,
-              description: 'List of 6 synergistic Yu-Gi-Oh! cards.',
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  name: {
-                    type: Type.STRING,
-                    description: 'Exact official English Yu-Gi-Oh! TCG card name.'
-                  },
-                  category: {
-                    type: Type.STRING,
-                    description:
-                      'Short 2-3 word synergy badge label (e.g., "AI Combo Piece", "AI Searcher", "AI Tech Support", "AI Boss Synergy").'
-                  },
-                  reason: {
-                    type: Type.STRING,
-                    description:
-                      'Concise 1-sentence explanation (max 110 characters) of how this card synergizes with the selected card.'
-                  }
-                },
-                required: ['name', 'category', 'reason']
-              }
-            }
+            responseSchema
           }
         });
 
         const response = await Promise.race([genPromise, timeoutPromise]);
-        const rawText = response.text || '[]';
-        const json = JSON.parse(rawText);
-        if (Array.isArray(json) && json.length > 0) {
-          parsed = json
-            .filter(
-              (item) =>
-                item &&
-                typeof item.name === 'string' &&
-                item.name.trim().toLowerCase() !== card.name!.trim().toLowerCase() &&
-                !excludeSet.has(item.name.trim().toLowerCase())
-            )
-            .slice(0, 8)
-            .map((item) => ({
-              name: item.name.trim(),
-              category: String(item.category || 'AI Synergy').trim(),
-              reason: String(
-                item.reason || 'Recommended by Gemini AI for tactical deck synergy.'
-              ).trim()
-            }));
+        const items = parseSuggestions(response.text || '[]');
+        if (items.length === 0) {
+          throw new Error(`Empty suggestions from ${model}`);
         }
-        if (parsed.length > 0) break;
-      } catch {
-        // Proceed to the next model or curated tactical synergy fallback
-      } finally {
-        if (timeoutId !== undefined) {
-          clearTimeout(timeoutId);
-        }
+        return items;
+      });
+
+      parsed = await Promise.any(racePromises);
+    } catch {
+      // All parallel fast candidates failed or timed out; fallback handled below
+    } finally {
+      for (const timerId of activeTimers) {
+        clearTimeout(timerId);
       }
     }
 

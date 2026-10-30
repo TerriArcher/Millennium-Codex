@@ -604,31 +604,46 @@ export async function getAllMatchingCards(filters: CardFilterState): Promise<Yug
   return cards;
 }
 
+const resolvedCardByNameCache = new Map<string, YugiohCard>();
+
 /**
- * Checks all warm in-memory client caches (queryCache, unconstrainedDrawQueue, FALLBACK_CARDS)
+ * Checks all warm in-memory client caches (resolvedCardByNameCache, queryCache, unconstrainedDrawQueue, FALLBACK_CARDS)
  * for a card matching an exact name (case-insensitive) to avoid unnecessary network calls.
  */
 export function findCardInWarmCache(name: string): YugiohCard | undefined {
   const target = name.trim().toLowerCase();
   if (!target) return undefined;
 
+  const direct = resolvedCardByNameCache.get(target);
+  if (direct) return direct;
+
   for (const entry of queryCache.values()) {
     const found = entry.data.find((c) => c.name.toLowerCase() === target);
-    if (found) return found;
+    if (found) {
+      resolvedCardByNameCache.set(target, found);
+      return found;
+    }
   }
 
   const inQueue = unconstrainedDrawQueue.find((c) => c.name.toLowerCase() === target);
-  if (inQueue) return inQueue;
+  if (inQueue) {
+    resolvedCardByNameCache.set(target, inQueue);
+    return inQueue;
+  }
 
   const inFallback = FALLBACK_CARDS.find((c) => c.name.toLowerCase() === target);
-  if (inFallback && isPlayableCard(inFallback)) return normalizeCard(inFallback);
+  if (inFallback && isPlayableCard(inFallback)) {
+    const normalized = normalizeCard(inFallback);
+    resolvedCardByNameCache.set(target, normalized);
+    return normalized;
+  }
 
   return undefined;
 }
 
 /**
  * Resolves multiple card names in a single batched YGOPRODeck API request using pipe-delimited
- * `?name=Name1|Name2|Name3`, checking warm caches first and falling back to fuzzy search if needed.
+ * `?name=Name1|Name2|Name3`, checking warm caches first and falling back to fuzzy search only if needed.
  */
 export async function fetchCardsByNamesBatch(names: string[]): Promise<YugiohCard[]> {
   const uniqueNames = Array.from(
@@ -665,35 +680,41 @@ export async function fetchCardsByNamesBatch(names: string[]): Promise<YugiohCar
       const cards = extractAndNormalizeCards(json);
       for (const c of cards) {
         resolvedMap.set(c.id, c);
+        resolvedCardByNameCache.set(c.name.toLowerCase(), c);
+        preloadCardImage(c);
       }
     }
   } catch (err) {
     console.warn('Batch name lookup failed, attempting individual fuzzy fallback:', err);
   }
 
-  // If any requested names did not match exact pipe lookup (e.g. slight punctuation difference or archetype prefix),
-  // resolve up to 3 remaining names via cached keyword/fname lookup
-  const stillMissing = batchSlice.filter(
-    (reqName) =>
-      !Array.from(resolvedMap.values()).some(
-        (c) => c.name.toLowerCase() === reqName.toLowerCase()
-      )
-  );
+  // Only perform an extra fuzzy round-trip if the primary pipe-delimited batch resolved fewer than 3 cards
+  if (resolvedMap.size < 3) {
+    const stillMissing = batchSlice.filter(
+      (reqName) =>
+        !Array.from(resolvedMap.values()).some(
+          (c) => c.name.toLowerCase() === reqName.toLowerCase()
+        )
+    );
 
-  if (stillMissing.length > 0 && resolvedMap.size < 8) {
-    const fuzzyPromises = stillMissing.slice(0, 3).map(async (partialName) => {
-      try {
-        const { cards } = await fetchFilteredPoolWithDeduplication({ keyword: partialName });
-        const bestMatch =
-          cards.find((c) => c.name.toLowerCase() === partialName.toLowerCase()) || cards[0];
-        if (bestMatch) {
-          resolvedMap.set(bestMatch.id, bestMatch);
+    if (stillMissing.length > 0) {
+      const fuzzyPromises = stillMissing.slice(0, 2).map(async (partialName) => {
+        try {
+          const { cards } = await fetchFilteredPoolWithDeduplication({ keyword: partialName });
+          const bestMatch =
+            cards.find((c) => c.name.toLowerCase() === partialName.toLowerCase()) || cards[0];
+          if (bestMatch) {
+            resolvedMap.set(bestMatch.id, bestMatch);
+            resolvedCardByNameCache.set(bestMatch.name.toLowerCase(), bestMatch);
+            resolvedCardByNameCache.set(partialName.toLowerCase(), bestMatch);
+            preloadCardImage(bestMatch);
+          }
+        } catch {
+          // Ignore individual fuzzy lookup errors
         }
-      } catch {
-        // Ignore individual fuzzy lookup errors
-      }
-    });
-    await Promise.all(fuzzyPromises);
+      });
+      await Promise.all(fuzzyPromises);
+    }
   }
 
   return Array.from(resolvedMap.values());

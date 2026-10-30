@@ -4,7 +4,8 @@ import {
   RelevantCardRecommendation,
   SynergyBadgeType,
   getRuleBasedRelevantCards,
-  getAiSuggestedRelevantCards
+  getAiSuggestedRelevantCards,
+  prefetchAiSuggestedRelevantCards
 } from '../services/relevantCardsService';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { toggleFavorite } from '../store/slices/historySlice';
@@ -195,8 +196,7 @@ export const RelevantCardsSheet: React.FC<RelevantCardsSheetProps> = ({
     setAiError(null);
 
     getAiSuggestedRelevantCards(activeCardRef.current, {
-      includeArchetype,
-      refreshSeed: poolRefreshSeed
+      includeArchetype
     })
       .then((res) => {
         if (!cancelled) {
@@ -214,7 +214,7 @@ export const RelevantCardsSheet: React.FC<RelevantCardsSheetProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [isOpen, isEntranceComplete, includeAiSynergies, includeArchetype, activeCard.id, poolRefreshSeed]);
+  }, [isOpen, isEntranceComplete, includeAiSynergies, includeArchetype, activeCard.id]);
 
   // Combine into a single unified grid (respecting both Include Archetypal cards and Include AI Suggested Synergies)
   const unifiedRecommendations = useMemo(() => {
@@ -258,7 +258,12 @@ export const RelevantCardsSheet: React.FC<RelevantCardsSheetProps> = ({
     setHoveredCard(null);
     setHoveredRect(null);
     setIncludeAiSynergies((prev) => !prev);
-    setPoolRefreshSeed((prev) => prev + 1);
+  };
+
+  const handlePrefetchAiSynergies = () => {
+    if (isOpen && isEntranceComplete && !includeAiSynergies) {
+      prefetchAiSuggestedRelevantCards(activeCardRef.current);
+    }
   };
 
   const handleReturnToCurrentCard = () => {
@@ -421,6 +426,8 @@ export const RelevantCardsSheet: React.FC<RelevantCardsSheetProps> = ({
                 role="checkbox"
                 aria-checked={includeAiSynergies}
                 onClick={handleToggleAiSynergies}
+                onMouseEnter={handlePrefetchAiSynergies}
+                onFocus={handlePrefetchAiSynergies}
                 className={`flex items-center justify-center sm:justify-start gap-1.5 px-2 py-1.5 sm:px-2.5 sm:py-1.5 rounded-lg sm:rounded-xl border text-[11px] sm:text-xs font-semibold transition-all cursor-pointer select-none min-w-0 ${
                   includeAiSynergies
                     ? 'bg-purple-950/60 border-purple-400/70 text-purple-200 shadow-sm shadow-purple-950/50'
