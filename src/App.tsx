@@ -10,19 +10,14 @@ import { store } from './store';
 import { useAppDispatch, useAppSelector } from './store/hooks';
 import {
   setCurrentCard,
-  setTotalMatches,
-  setCardError,
-  setIsMatchingSheetOpen,
-  setMatchingCards,
-  setIsMatchingLoading,
-  recordNewDraw
+  setIsMatchingSheetOpen
 } from './store/slices/cardsSlice';
 import {
   addCardToHistory,
+  removeCardFromHistory,
   clearHistory,
   setIsHistoryOpen,
-  setIsFavoritesOpen,
-  setIsQuickDrawing
+  setIsFavoritesOpen
 } from './store/slices/historySlice';
 import { Navbar } from './components/Navbar';
 import { CardRandomizerPage } from './pages/CardRandomizerPage';
@@ -32,12 +27,7 @@ import { FavoritesDrawer } from './components/FavoritesDrawer';
 import { MatchingCardsSheet } from './components/MatchingCardsSheet';
 import { ScrollToTopButton } from './components/ScrollToTopButton';
 import { YugiohCard } from './types/card';
-import { FALLBACK_CARDS } from './data/fallbackCards';
-import {
-  fetchRandomCardFromApi,
-  filterFallbackCards,
-  getAllMatchingCards
-} from './services/ygoprodeckApi';
+import { useCardActions } from './hooks/useCardActions';
 
 function AppContent() {
   const dispatch = useAppDispatch();
@@ -57,71 +47,43 @@ function AppContent() {
   const isMatchingLoading = useAppSelector((state) => state.cards.isMatchingLoading);
 
   const navigate = useNavigate();
+  const { drawRandomCard, openMatchingCardsSheet } = useCardActions();
 
-  const handleOpenMatchingCards = async () => {
-    dispatch(setIsMatchingSheetOpen(true));
-    dispatch(setIsMatchingLoading(true));
-    try {
-      const allCards = await getAllMatchingCards(filters);
-      dispatch(setMatchingCards(allCards));
-    } catch (err) {
-      console.warn('Failed to load matching cards for sheet:', err);
-      dispatch(setMatchingCards([]));
-    } finally {
-      dispatch(setIsMatchingLoading(false));
-    }
-  };
-
-  // Quick draw preserves and prioritizes active filters
-  const handleQuickDraw = async () => {
-    const state = store.getState();
-    if (
-      state.cards.isLoading ||
-      state.history.isQuickDrawing ||
-      state.cards.isCardAnimating
-    ) {
-      return;
-    }
-    dispatch(setIsQuickDrawing(true));
-    dispatch(setCardError(null));
-
-    // Get current active criteria from Redux store
-    const activeFilters = store.getState().filters;
-
-    try {
-      const data = await fetchRandomCardFromApi(activeFilters, currentCard?.id);
-      if (data.card) {
-        dispatch(recordNewDraw());
-        dispatch(setCurrentCard(data.card));
-        dispatch(addCardToHistory(data.card));
-        dispatch(setTotalMatches(data.totalMatches));
-        navigate('/');
-      }
-    } catch (err: any) {
-      if (err?.status === 404) {
-        dispatch(setCardError('No card matching this exact criteria was found. Try loosening the filters.'));
-        navigate('/');
-        return;
-      }
-      console.warn('Quick draw error, fallback:', err);
-      let pool = filterFallbackCards(activeFilters, currentCard?.id);
-      if (pool.length === 0) pool = FALLBACK_CARDS;
-      if (currentCard && pool.length > 1) {
-        pool = pool.filter((c) => c.id !== currentCard.id);
-      }
-      const randomCard = pool[Math.floor(Math.random() * pool.length)];
-      dispatch(recordNewDraw());
-      dispatch(setCurrentCard(randomCard));
-      dispatch(addCardToHistory(randomCard));
-      navigate('/');
-    } finally {
-      dispatch(setIsQuickDrawing(false));
-    }
+  const handleQuickDraw = () => {
+    void drawRandomCard({
+      mode: 'quick',
+      onDoneNavigate: () => navigate('/')
+    });
   };
 
   const handleSelectCard = (card: YugiohCard) => {
     dispatch(setCurrentCard(card));
     navigate('/');
+  };
+
+  const handleClearHistory = () => {
+    dispatch(clearHistory(currentCard));
+  };
+
+  const handleDeleteHistoryCard = (cardToDelete: YugiohCard) => {
+    const isDeletingCurrent = currentCard?.id === cardToDelete.id;
+    const deletedIndex = history.findIndex((c) => c.id === cardToDelete.id);
+    const remainingCards = history.filter((c) => c.id !== cardToDelete.id);
+
+    dispatch(removeCardFromHistory(cardToDelete.id));
+
+    if (isDeletingCurrent) {
+      if (remainingCards.length === 0) {
+        void drawRandomCard({
+          mode: 'quick',
+          force: true
+        });
+      } else {
+        const nextIndex =
+          deletedIndex >= 0 ? Math.min(deletedIndex, remainingCards.length - 1) : 0;
+        dispatch(setCurrentCard(remainingCards[nextIndex]));
+      }
+    }
   };
 
   const activeFiltersCount = Object.values(filters).filter(
@@ -139,7 +101,7 @@ function AppContent() {
         isLoading={isDrawDisabled}
         activeFiltersCount={activeFiltersCount}
         totalMatches={totalMatches}
-        onOpenMatchingCards={handleOpenMatchingCards}
+        onOpenMatchingCards={() => void openMatchingCardsSheet()}
       />
 
       <main className="flex-1 w-full max-w-full">
@@ -154,7 +116,8 @@ function AppContent() {
         onClose={() => dispatch(setIsHistoryOpen(false))}
         history={history}
         onSelectCard={handleSelectCard}
-        onClearHistory={() => dispatch(clearHistory())}
+        onClearHistory={handleClearHistory}
+        onDeleteCard={handleDeleteHistoryCard}
       />
 
       <FavoritesDrawer

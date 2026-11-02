@@ -42,7 +42,6 @@ const initialState: CardFilterState = loadFiltersFromStorage();
 export interface SetFilterFieldPayload {
   key: keyof CardFilterState;
   value: any;
-  typeOverride?: string;
 }
 
 export const filtersSlice = createSlice({
@@ -52,19 +51,6 @@ export const filtersSlice = createSlice({
     setFilterField: (state, action: PayloadAction<SetFilterFieldPayload>) => {
       const { key, value } = action.payload;
       if (value === undefined || value === '' || value === null) {
-        delete state[key];
-      } else {
-        (state as any)[key] = value;
-      }
-      saveFiltersToStorage(state);
-    },
-    toggleFilterField: (state, action: PayloadAction<SetFilterFieldPayload>) => {
-      const { key, value } = action.payload;
-      const currentVal = (state as any)[key];
-      if (
-        currentVal !== undefined &&
-        String(currentVal).toLowerCase() === String(value).toLowerCase()
-      ) {
         delete state[key];
       } else {
         (state as any)[key] = value;
@@ -83,5 +69,5 @@ export const filtersSlice = createSlice({
   }
 });
 
-export const { setFilterField, toggleFilterField, setAllFilters, resetFilters } = filtersSlice.actions;
+export const { setFilterField, setAllFilters, resetFilters } = filtersSlice.actions;
 export default filtersSlice.reducer;

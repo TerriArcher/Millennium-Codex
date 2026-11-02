@@ -13,9 +13,9 @@ async function startServer() {
   const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
   const isProd = process.env.NODE_ENV === 'production';
 
-  app.use(express.json());
+  app.use(express.json({ limit: '32kb' }));
 
-  // Register unified API endpoints (/api/cards/random, /api/cards/filters, /api/resources, /api/cards/synergy)
+  // Register API endpoint (/api/cards/synergy)
   registerApiRoutes(app);
 
   const httpServer = http.createServer(app);

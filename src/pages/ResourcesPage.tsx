@@ -11,8 +11,7 @@ import {
   Database,
   Gamepad2,
   Newspaper,
-  Sparkles,
-  ArrowRight
+  Sparkles
 } from 'lucide-react';
 
 export const ResourcesPage: React.FC = () => {

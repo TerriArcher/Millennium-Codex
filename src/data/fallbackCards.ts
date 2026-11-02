@@ -22,7 +22,11 @@ export const INITIAL_ACE_CARDS: YugiohCard[] = [
       }
     ],
     card_sets: [
-      { set_name: "Legend of Blue Eyes White Dragon", set_code: "LOB-001", set_rarity: "Ultra Rare" }
+      { set_name: "Legend of Blue Eyes White Dragon", set_code: "LOB-001", set_rarity: "Ultra Rare", tcg_date: "2002-03-08", release_year: 2002 },
+      { set_name: "Starter Deck: Kaiba", set_code: "SDK-001", set_rarity: "Ultra Rare", tcg_date: "2002-03-29", release_year: 2002 },
+      { set_name: "Collectible Tins 2004", set_code: "CT1-EN002", set_rarity: "Secret Rare", tcg_date: "2004-09-01", release_year: 2004 },
+      { set_name: "Legendary Collection Kaiba Mega Pack", set_code: "LCKC-EN001", set_rarity: "Ultra Rare", tcg_date: "2018-03-09", release_year: 2018 },
+      { set_name: "25th Anniversary Rarity Collection II", set_code: "RA02-EN001", set_rarity: "Quarter Century Secret Rare", tcg_date: "2024-05-24", release_year: 2024 }
     ],
     ygoprodeck_url: "https://ygoprodeck.com/card/blue-eyes-white-dragon-7498",
     card_prices: [{ tcgplayer_price: "1.85", cardmarket_price: "1.40" }]
@@ -47,6 +51,13 @@ export const INITIAL_ACE_CARDS: YugiohCard[] = [
         image_url_cropped: "https://images.ygoprodeck.com/images/cards_cropped/46986414.jpg"
       }
     ],
+    card_sets: [
+      { set_name: "Legend of Blue Eyes White Dragon", set_code: "LOB-005", set_rarity: "Ultra Rare", tcg_date: "2002-03-08", release_year: 2002 },
+      { set_name: "Starter Deck: Yugi", set_code: "SDY-006", set_rarity: "Ultra Rare", tcg_date: "2002-03-29", release_year: 2002 },
+      { set_name: "Collectible Tins 2004", set_code: "CT1-EN001", set_rarity: "Secret Rare", tcg_date: "2004-09-01", release_year: 2004 },
+      { set_name: "Legendary Collection 3: Yugi's World Mega Pack", set_code: "LCYW-EN001", set_rarity: "Secret Rare", tcg_date: "2012-10-02", release_year: 2012 },
+      { set_name: "Duel Power", set_code: "DUPO-EN101", set_rarity: "Ultra Rare", tcg_date: "2019-04-03", release_year: 2019 }
+    ],
     ygoprodeck_url: "https://ygoprodeck.com/card/dark-magician-4003",
     card_prices: [{ tcgplayer_price: "1.50", cardmarket_price: "1.20" }]
   },
@@ -69,6 +80,11 @@ export const INITIAL_ACE_CARDS: YugiohCard[] = [
         image_url_small: "https://images.ygoprodeck.com/images/cards_small/89943723.jpg",
         image_url_cropped: "https://images.ygoprodeck.com/images/cards_cropped/89943723.jpg"
       }
+    ],
+    card_sets: [
+      { set_name: "Power of the Duelist", set_code: "POTD-EN001", set_rarity: "Common", tcg_date: "2006-08-16", release_year: 2006 },
+      { set_name: "Collectible Tins 2006", set_code: "CT03-EN001", set_rarity: "Secret Rare", tcg_date: "2006-09-01", release_year: 2006 },
+      { set_name: "Battles of Legend: Monstrous Revenge", set_code: "BLMR-EN011", set_rarity: "Quarter Century Secret Rare", tcg_date: "2023-06-23", release_year: 2023 }
     ],
     ygoprodeck_url: "https://ygoprodeck.com/card/elemental-hero-neos-7561",
     card_prices: [{ tcgplayer_price: "0.75", cardmarket_price: "0.60" }]
@@ -93,6 +109,12 @@ export const INITIAL_ACE_CARDS: YugiohCard[] = [
         image_url_cropped: "https://images.ygoprodeck.com/images/cards_cropped/44508094.jpg"
       }
     ],
+    card_sets: [
+      { set_name: "Collectible Tins 2008", set_code: "CT05-EN001", set_rarity: "Secret Rare", tcg_date: "2008-08-19", release_year: 2008 },
+      { set_name: "The Duelist Genesis", set_code: "TDGS-EN040", set_rarity: "Ultra Rare", tcg_date: "2008-09-02", release_year: 2008 },
+      { set_name: "Legendary Collection 5D's Mega Pack", set_code: "LC5D-EN030", set_rarity: "Ultra Rare", tcg_date: "2014-10-24", release_year: 2014 },
+      { set_name: "Duel Power", set_code: "DUPO-EN103", set_rarity: "Ultra Rare", tcg_date: "2019-04-03", release_year: 2019 }
+    ],
     ygoprodeck_url: "https://ygoprodeck.com/card/stardust-dragon-3807",
     card_prices: [{ tcgplayer_price: "2.20", cardmarket_price: "1.90" }]
   },
@@ -116,6 +138,11 @@ export const INITIAL_ACE_CARDS: YugiohCard[] = [
         image_url_cropped: "https://images.ygoprodeck.com/images/cards_cropped/84013238.jpg"
       }
     ],
+    card_sets: [
+      { set_name: "Starter Deck: Dawn of the Xyz", set_code: "YS11-EN041", set_rarity: "Ultra Rare", tcg_date: "2011-05-31", release_year: 2011 },
+      { set_name: "Starter Deck: Xyz Symphony", set_code: "YS12-EN039", set_rarity: "Common", tcg_date: "2012-04-17", release_year: 2012 },
+      { set_name: "Duel Power", set_code: "DUPO-EN104", set_rarity: "Ultra Rare", tcg_date: "2019-04-03", release_year: 2019 }
+    ],
     ygoprodeck_url: "https://ygoprodeck.com/card/number-39-utopia-7153",
     card_prices: [{ tcgplayer_price: "0.85", cardmarket_price: "0.70" }]
   },
@@ -138,6 +165,11 @@ export const INITIAL_ACE_CARDS: YugiohCard[] = [
         image_url_small: "https://images.ygoprodeck.com/images/cards_small/1861629.jpg",
         image_url_cropped: "https://images.ygoprodeck.com/images/cards_cropped/1861629.jpg"
       }
+    ],
+    card_sets: [
+      { set_name: "Starter Deck: Link Strike", set_code: "YS17-EN041", set_rarity: "Ultra Rare", tcg_date: "2017-07-21", release_year: 2017 },
+      { set_name: "Duel Power", set_code: "DUPO-EN106", set_rarity: "Ultra Rare", tcg_date: "2019-04-03", release_year: 2019 },
+      { set_name: "25th Anniversary Rarity Collection II", set_code: "RA02-EN047", set_rarity: "Super Rare", tcg_date: "2024-05-24", release_year: 2024 }
     ],
     ygoprodeck_url: "https://ygoprodeck.com/card/decode-talker-157",
     card_prices: [{ tcgplayer_price: "0.45", cardmarket_price: "0.35" }]
@@ -166,7 +198,9 @@ export const FALLBACK_CARDS: YugiohCard[] = [
       }
     ],
     card_sets: [
-      { set_name: "Legend of Blue Eyes White Dragon", set_code: "LOB-001", set_rarity: "Ultra Rare" }
+      { set_name: "Legend of Blue Eyes White Dragon", set_code: "LOB-001", set_rarity: "Ultra Rare", tcg_date: "2002-03-08", release_year: 2002 },
+      { set_name: "Starter Deck: Kaiba", set_code: "SDK-001", set_rarity: "Ultra Rare", tcg_date: "2002-03-29", release_year: 2002 },
+      { set_name: "Legendary Collection Kaiba Mega Pack", set_code: "LCKC-EN001", set_rarity: "Ultra Rare", tcg_date: "2018-03-09", release_year: 2018 }
     ]
   },
   {
@@ -188,6 +222,11 @@ export const FALLBACK_CARDS: YugiohCard[] = [
         image_url_small: "https://images.ygoprodeck.com/images/cards_small/46986414.jpg",
         image_url_cropped: "https://images.ygoprodeck.com/images/cards_cropped/46986414.jpg"
       }
+    ],
+    card_sets: [
+      { set_name: "Legend of Blue Eyes White Dragon", set_code: "LOB-005", set_rarity: "Ultra Rare", tcg_date: "2002-03-08", release_year: 2002 },
+      { set_name: "Starter Deck: Yugi", set_code: "SDY-006", set_rarity: "Ultra Rare", tcg_date: "2002-03-29", release_year: 2002 },
+      { set_name: "Duel Power", set_code: "DUPO-EN101", set_rarity: "Ultra Rare", tcg_date: "2019-04-03", release_year: 2019 }
     ]
   },
   // Pendulum Monster 1: Astrograph Sorcerer (Scale 1)

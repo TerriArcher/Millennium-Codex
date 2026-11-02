@@ -1,7 +1,364 @@
-import { YugiohCard, CardFilterState } from '../types/card';
+import { YugiohCard, CardFilterState, CardSet } from '../types/card';
 import { FALLBACK_CARDS } from '../data/fallbackCards';
+import { sanitizeExternalHttpUrl } from '../utils/cardFormatters';
 
 const YGOPRODECK_API_URL = 'https://db.ygoprodeck.com/api/v7/cardinfo.php';
+const YGOPRODECK_CARDSETS_URL = 'https://db.ygoprodeck.com/api/v7/cardsets.php';
+const CARDSETS_STORAGE_KEY = 'ygo_cardsets_release_dates_v1';
+
+// Static fallback map of major TCG set codes to release dates (YYYY-MM-DD) for instant resolution
+const STATIC_SET_RELEASE_DATES_BY_CODE: Record<string, string> = {
+  LOB: '2002-03-08',
+  SDK: '2002-03-29',
+  SDY: '2002-03-29',
+  MRD: '2002-06-26',
+  MRL: '2002-09-16',
+  SRL: '2002-09-16',
+  PSV: '2002-10-20',
+  LON: '2003-03-01',
+  SDJ: '2003-03-30',
+  SDP: '2003-03-30',
+  LOD: '2003-06-06',
+  PGD: '2003-07-18',
+  MFC: '2003-10-10',
+  DCR: '2003-12-01',
+  SYE: '2004-03-01',
+  SKE: '2004-03-01',
+  IOC: '2004-03-01',
+  AST: '2004-06-01',
+  CT1: '2004-09-01',
+  SOD: '2004-10-01',
+  RDS: '2004-12-01',
+  DB1: '2004-10-12',
+  FET: '2005-03-01',
+  DR1: '2005-03-19',
+  TLM: '2005-06-01',
+  DB2: '2005-07-27',
+  CRV: '2005-08-17',
+  CT2: '2005-09-01',
+  DR2: '2005-10-20',
+  EEN: '2005-11-16',
+  SOI: '2006-02-28',
+  EOJ: '2006-05-17',
+  POTD: '2006-08-16',
+  CT03: '2006-09-01',
+  CDIP: '2006-11-15',
+  DR3: '2006-11-25',
+  STON: '2007-02-28',
+  FOTB: '2007-05-16',
+  TAEV: '2007-08-15',
+  CT04: '2007-09-01',
+  GLAS: '2007-11-14',
+  DR04: '2007-11-14',
+  PTDN: '2008-02-13',
+  LODT: '2008-05-13',
+  CT05: '2008-08-19',
+  TDGS: '2008-09-02',
+  CSOC: '2008-11-18',
+  CRMS: '2009-03-03',
+  RGBT: '2009-05-12',
+  ANPR: '2009-09-01',
+  CT06: '2009-08-18',
+  SOVR: '2009-11-17',
+  ABPF: '2010-02-16',
+  TSHD: '2010-05-11',
+  DREV: '2010-08-17',
+  CT07: '2010-08-31',
+  STBL: '2010-11-16',
+  STOR: '2011-02-08',
+  EXVC: '2011-05-10',
+  YS11: '2011-05-31',
+  GENF: '2011-08-16',
+  CT08: '2011-08-30',
+  PHSW: '2011-11-15',
+  ORCS: '2012-01-24',
+  YS12: '2012-04-17',
+  GAOV: '2012-05-08',
+  REDU: '2012-08-28',
+  CT09: '2012-08-14',
+  LCYW: '2012-10-02',
+  ABYR: '2012-11-09',
+  CBLZ: '2013-01-25',
+  LTGY: '2013-05-17',
+  YS13: '2013-06-14',
+  JOTL: '2013-08-09',
+  CT10: '2013-08-30',
+  LCJW: '2013-10-11',
+  SHSP: '2013-11-08',
+  LVAL: '2014-01-24',
+  PRIO: '2014-05-16',
+  YS14: '2014-07-11',
+  DUEA: '2014-08-15',
+  MP14: '2014-08-29',
+  LC5D: '2014-10-24',
+  NECH: '2014-11-07',
+  SECE: '2015-01-16',
+  CROS: '2015-05-15',
+  CORE: '2015-08-07',
+  MP15: '2015-09-18',
+  DOCS: '2015-11-06',
+  BOSH: '2016-01-15',
+  SHVI: '2016-05-06',
+  TDIL: '2016-08-05',
+  MP16: '2016-09-02',
+  SDKS: '2016-10-21',
+  SDMY: '2016-10-21',
+  INOV: '2016-11-04',
+  RATE: '2017-02-10',
+  DUPO: '2019-04-03',
+  MACR: '2017-05-05',
+  YS17: '2017-07-21',
+  COTD: '2017-08-04',
+  MP17: '2017-08-25',
+  LEDD: '2017-10-06',
+  CIBR: '2017-10-20',
+  EXFO: '2018-02-02',
+  LCKC: '2018-03-09',
+  FLOD: '2018-05-04',
+  CYHO: '2018-07-27',
+  MP18: '2018-08-31',
+  SOFU: '2018-10-19',
+  SAST: '2019-02-01',
+  SDSB: '2019-02-15',
+  DANE: '2019-05-03',
+  RIRA: '2019-07-26',
+  MP19: '2019-08-30',
+  SDRR: '2019-08-16',
+  CHIM: '2019-10-25',
+  IGAS: '2020-01-31',
+  SDSH: '2020-02-14',
+  DUOV: '2020-03-20',
+  ETCO: '2020-05-01',
+  ROTD: '2020-08-07',
+  MP20: '2020-08-28',
+  PHRA: '2020-11-06',
+  BLVO: '2021-02-05',
+  GFTP: '2021-04-16',
+  LIOV: '2021-06-04',
+  DAMA: '2021-08-13',
+  MP21: '2021-10-01',
+  SDCS: '2021-10-15',
+  BODE: '2021-11-05',
+  BACH: '2022-02-11',
+  SDAZ: '2022-04-15',
+  GFP2: '2022-05-06',
+  DIFO: '2022-05-20',
+  LED9: '2022-06-17',
+  POTE: '2022-08-05',
+  MP22: '2022-09-16',
+  SDCB: '2022-09-30',
+  DABL: '2022-10-21',
+  MAMA: '2022-11-04',
+  PHHY: '2023-02-10',
+  MAZE: '2023-03-10',
+  CYAC: '2023-05-05',
+  BLMR: '2023-06-23',
+  DUNE: '2023-07-28',
+  MP23: '2023-09-08',
+  SDCK: '2023-09-22',
+  AGOV: '2023-10-20',
+  RA01: '2023-11-03',
+  MZMI: '2024-01-19',
+  PHNI: '2024-02-09',
+  LEDE: '2024-04-26',
+  RA02: '2024-05-24',
+  BLTR: '2024-06-21',
+  INFO: '2024-07-19',
+  MP24: '2024-09-20',
+  ROTA: '2024-10-11',
+  RA03: '2024-11-15',
+  SUDA: '2025-01-24'
+};
+
+const setReleaseDateByCode = new Map<string, string>();
+const setReleaseDateByName = new Map<string, string>();
+let cardSetsMetadataLoaded = false;
+let cardSetsMetadataPromise: Promise<void> | null = null;
+const cardSetsMetadataListeners = new Set<() => void>();
+
+// Seed maps with static release dates immediately
+for (const [code, dateStr] of Object.entries(STATIC_SET_RELEASE_DATES_BY_CODE)) {
+  setReleaseDateByCode.set(code.toUpperCase(), dateStr);
+}
+
+function hydrateCardSetsFromLocalStorage(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const raw = window.localStorage.getItem(CARDSETS_STORAGE_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (parsed && Array.isArray(parsed.sets)) {
+      for (const item of parsed.sets) {
+        if (item.c && item.d) setReleaseDateByCode.set(String(item.c).toUpperCase(), String(item.d));
+        if (item.n && item.d) setReleaseDateByName.set(String(item.n).toLowerCase(), String(item.d));
+      }
+      if (Date.now() - (parsed.ts || 0) < 1000 * 60 * 60 * 24 * 7) {
+        cardSetsMetadataLoaded = true;
+      }
+    }
+  } catch {
+    // Ignore storage read errors
+  }
+}
+
+hydrateCardSetsFromLocalStorage();
+
+/**
+ * Fetches and caches official YGOPRODeck card set release dates (`cardsets.php`) once.
+ */
+export function ensureCardSetsMetadataLoaded(onLoaded?: () => void): Promise<void> {
+  if (cardSetsMetadataLoaded) {
+    onLoaded?.();
+    return Promise.resolve();
+  }
+  if (onLoaded) {
+    cardSetsMetadataListeners.add(onLoaded);
+  }
+  if (cardSetsMetadataPromise) {
+    return cardSetsMetadataPromise;
+  }
+
+  cardSetsMetadataPromise = (async () => {
+    try {
+      const response = await fetch(YGOPRODECK_CARDSETS_URL, {
+        headers: { Accept: 'application/json' }
+      });
+      if (response.ok) {
+        const list = await response.json();
+        if (Array.isArray(list)) {
+          const compactForStorage: Array<{ c: string; n: string; d: string }> = [];
+          for (const entry of list) {
+            const tcgDate = entry?.tcg_date ? String(entry.tcg_date).trim() : '';
+            if (!tcgDate || !/^\d{4}/.test(tcgDate)) continue;
+            const code = entry?.set_code ? String(entry.set_code).trim().toUpperCase() : '';
+            const name = entry?.set_name ? String(entry.set_name).trim().toLowerCase() : '';
+            if (code) setReleaseDateByCode.set(code, tcgDate);
+            if (name) setReleaseDateByName.set(name, tcgDate);
+            if (code || name) {
+              compactForStorage.push({ c: code, n: name, d: tcgDate });
+            }
+          }
+          cardSetsMetadataLoaded = true;
+          if (typeof window !== 'undefined') {
+            try {
+              window.localStorage.setItem(
+                CARDSETS_STORAGE_KEY,
+                JSON.stringify({ ts: Date.now(), sets: compactForStorage })
+              );
+            } catch {
+              // Ignore storage quota errors
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Could not fetch cardsets release metadata:', err);
+    } finally {
+      cardSetsMetadataPromise = null;
+      for (const listener of cardSetsMetadataListeners) {
+        try {
+          listener();
+        } catch {
+          // Ignore listener error
+        }
+      }
+      cardSetsMetadataListeners.clear();
+    }
+  })();
+
+  return cardSetsMetadataPromise;
+}
+
+/**
+ * Resolves the TCG release date (`YYYY-MM-DD`) and 4-digit release year for a single CardSet.
+ */
+export function resolveCardSetReleaseInfo(set: CardSet): { tcg_date?: string; release_year?: number } {
+  if (set.tcg_date && /^\d{4}/.test(set.tcg_date)) {
+    const yr = parseInt(set.tcg_date.slice(0, 4), 10);
+    return { tcg_date: set.tcg_date, release_year: !isNaN(yr) ? yr : set.release_year };
+  }
+
+  const rawCode = String(set.set_code || '').trim().toUpperCase();
+  const codePrefix = rawCode.split('-')[0].trim();
+  const normalizedName = String(set.set_name || '').trim().toLowerCase();
+
+  let matchedDate =
+    (codePrefix && setReleaseDateByCode.get(codePrefix)) ||
+    (normalizedName && setReleaseDateByName.get(normalizedName));
+
+  // Fallback pattern inference for annual Mega-Tins / Collector Tins / Starter Decks if not yet in map
+  if (!matchedDate) {
+    const mpMatch = codePrefix.match(/^(?:MP|CT|YS)(\d{2})$/);
+    if (mpMatch) {
+      const twoDigit = parseInt(mpMatch[1], 10);
+      if (twoDigit >= 2 && twoDigit <= 30) {
+        matchedDate = `${2000 + twoDigit}-09-01`;
+      }
+    } else {
+      const nameYearMatch = normalizedName.match(/\b(1999|20[0-2]\d)\b/);
+      if (nameYearMatch) {
+        matchedDate = `${nameYearMatch[1]}-06-01`;
+      }
+    }
+  }
+
+  if (matchedDate && /^\d{4}/.test(matchedDate)) {
+    const year = parseInt(matchedDate.slice(0, 4), 10);
+    return {
+      tcg_date: matchedDate,
+      release_year: !isNaN(year) ? year : set.release_year
+    };
+  }
+
+  if (typeof set.release_year === 'number' && !isNaN(set.release_year)) {
+    return {
+      tcg_date: `${set.release_year}-12-31`,
+      release_year: set.release_year
+    };
+  }
+
+  return {};
+}
+
+/**
+ * Enriches an array of CardSets with `tcg_date` and `release_year` and automatically sorts them
+ * chronologically from oldest to newest (placing any sets without a known date at the end).
+ */
+export function enrichAndSortCardSets(sets?: CardSet[]): CardSet[] {
+  if (!Array.isArray(sets) || sets.length === 0) return [];
+
+  const enriched = sets.map((s) => {
+    const info = resolveCardSetReleaseInfo(s);
+    return {
+      ...s,
+      ...(info.tcg_date ? { tcg_date: info.tcg_date } : {}),
+      ...(info.release_year ? { release_year: info.release_year } : {})
+    };
+  });
+
+  // Sort oldest to newest automatically
+  return enriched.sort((a, b) => {
+    const dateA = a.tcg_date || (a.release_year ? `${a.release_year}-12-31` : '9999-12-31');
+    const dateB = b.tcg_date || (b.release_year ? `${b.release_year}-12-31` : '9999-12-31');
+    if (dateA !== dateB) {
+      return dateA.localeCompare(dateB);
+    }
+    return String(a.set_code || '').localeCompare(String(b.set_code || ''));
+  });
+}
+
+/**
+ * Returns the earliest known release year (Debut Year) for a card across its sets.
+ */
+export function getCardDebutYear(card: YugiohCard): number | undefined {
+  const sortedSets = enrichAndSortCardSets(card.card_sets);
+  for (const s of sortedSets) {
+    if (typeof s.release_year === 'number' && !isNaN(s.release_year)) {
+      return s.release_year;
+    }
+  }
+  return undefined;
+}
 
 // Bounded LRU client-side cache for filtered queries (max 3 filter pools, 30-minute TTL)
 const MAX_FILTER_CACHE_ENTRIES = 3;
@@ -193,17 +550,18 @@ export function normalizeCard(rawCard: any): YugiohCard {
     {
       id: firstImg?.id || cardId,
       image_url:
-        firstImg?.image_url || `https://images.ygoprodeck.com/images/cards/${cardId}.jpg`,
+        sanitizeExternalHttpUrl(firstImg?.image_url) ||
+        `https://images.ygoprodeck.com/images/cards/${cardId}.jpg`,
       image_url_small:
-        firstImg?.image_url_small ||
+        sanitizeExternalHttpUrl(firstImg?.image_url_small) ||
         `https://images.ygoprodeck.com/images/cards_small/${cardId}.jpg`,
       image_url_cropped:
-        firstImg?.image_url_cropped ||
+        sanitizeExternalHttpUrl(firstImg?.image_url_cropped) ||
         `https://images.ygoprodeck.com/images/cards_cropped/${cardId}.jpg`
     }
   ];
 
-  let ygoprodeckUrl = src.ygoprodeck_url;
+  let ygoprodeckUrl = sanitizeExternalHttpUrl(src.ygoprodeck_url);
   if (!ygoprodeckUrl) {
     const slug = cardName
       .toLowerCase()
@@ -249,13 +607,16 @@ export function normalizeCard(rawCard: any): YugiohCard {
     slimmed.linkmarkers = src.linkmarkers;
   }
   if (Array.isArray(src.card_sets) && src.card_sets.length > 0) {
-    // Only retain up to 8 card sets since the UI displays at most 8 sets
-    slimmed.card_sets = src.card_sets.slice(0, 8).map((s: any) => ({
+    // Map, enrich with release dates/years, sort chronologically (oldest to newest), and retain up to 16 sets
+    const rawMappedSets: CardSet[] = src.card_sets.map((s: any) => ({
       set_name: s.set_name,
       set_code: s.set_code,
       set_rarity: s.set_rarity,
-      ...(s.set_price ? { set_price: s.set_price } : {})
+      ...(s.set_price ? { set_price: s.set_price } : {}),
+      ...(s.tcg_date ? { tcg_date: s.tcg_date } : {}),
+      ...(s.release_year ? { release_year: s.release_year } : {})
     }));
+    slimmed.card_sets = enrichAndSortCardSets(rawMappedSets).slice(0, 16);
   }
   if (src.banlist_info && (src.banlist_info.ban_tcg || src.banlist_info.ban_ocg)) {
     slimmed.banlist_info = {
@@ -605,6 +966,21 @@ export async function getAllMatchingCards(filters: CardFilterState): Promise<Yug
 }
 
 const resolvedCardByNameCache = new Map<string, YugiohCard>();
+const MAX_RESOLVED_CARD_NAME_CACHE = 250;
+
+function cacheResolvedCardByName(nameKey: string, card: YugiohCard) {
+  const key = nameKey.trim().toLowerCase();
+  if (!key) return;
+  if (resolvedCardByNameCache.has(key)) {
+    resolvedCardByNameCache.delete(key);
+  } else if (resolvedCardByNameCache.size >= MAX_RESOLVED_CARD_NAME_CACHE) {
+    const oldestKey = resolvedCardByNameCache.keys().next().value;
+    if (oldestKey !== undefined) {
+      resolvedCardByNameCache.delete(oldestKey);
+    }
+  }
+  resolvedCardByNameCache.set(key, card);
+}
 
 /**
  * Checks all warm in-memory client caches (resolvedCardByNameCache, queryCache, unconstrainedDrawQueue, FALLBACK_CARDS)
@@ -620,21 +996,21 @@ export function findCardInWarmCache(name: string): YugiohCard | undefined {
   for (const entry of queryCache.values()) {
     const found = entry.data.find((c) => c.name.toLowerCase() === target);
     if (found) {
-      resolvedCardByNameCache.set(target, found);
+      cacheResolvedCardByName(target, found);
       return found;
     }
   }
 
   const inQueue = unconstrainedDrawQueue.find((c) => c.name.toLowerCase() === target);
   if (inQueue) {
-    resolvedCardByNameCache.set(target, inQueue);
+    cacheResolvedCardByName(target, inQueue);
     return inQueue;
   }
 
   const inFallback = FALLBACK_CARDS.find((c) => c.name.toLowerCase() === target);
   if (inFallback && isPlayableCard(inFallback)) {
     const normalized = normalizeCard(inFallback);
-    resolvedCardByNameCache.set(target, normalized);
+    cacheResolvedCardByName(target, normalized);
     return normalized;
   }
 
@@ -680,7 +1056,7 @@ export async function fetchCardsByNamesBatch(names: string[]): Promise<YugiohCar
       const cards = extractAndNormalizeCards(json);
       for (const c of cards) {
         resolvedMap.set(c.id, c);
-        resolvedCardByNameCache.set(c.name.toLowerCase(), c);
+        cacheResolvedCardByName(c.name, c);
         preloadCardImage(c);
       }
     }
@@ -705,8 +1081,8 @@ export async function fetchCardsByNamesBatch(names: string[]): Promise<YugiohCar
             cards.find((c) => c.name.toLowerCase() === partialName.toLowerCase()) || cards[0];
           if (bestMatch) {
             resolvedMap.set(bestMatch.id, bestMatch);
-            resolvedCardByNameCache.set(bestMatch.name.toLowerCase(), bestMatch);
-            resolvedCardByNameCache.set(partialName.toLowerCase(), bestMatch);
+            cacheResolvedCardByName(bestMatch.name, bestMatch);
+            cacheResolvedCardByName(partialName, bestMatch);
             preloadCardImage(bestMatch);
           }
         } catch {

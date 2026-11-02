@@ -7,6 +7,8 @@ import { openSimilarCardsForCard } from '../store/slices/cardsSlice';
 import { CardHoverTooltip } from './CardHoverTooltip';
 import { CardPreviewModal } from './CardPreviewModal';
 import { useModalBackHandler } from '../hooks/useModalBackHandler';
+import { useOverlayTransition } from '../hooks/useOverlayTransition';
+import { getCardSmallImageUrl } from '../utils/cardFormatters';
 
 interface MatchingCardsSheetProps {
   isOpen: boolean;
@@ -62,17 +64,6 @@ export const MatchingCardsSheet: React.FC<MatchingCardsSheetProps> = ({
     }
   }, [hasMultipleTypes, sortStyle]);
 
-  // Close on Escape key (only if preview modal is not open)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !previewCard) onClose();
-    };
-    if (isOpen) {
-      window.addEventListener('keydown', handleKeyDown);
-    }
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose, previewCard]);
-
   // Reset sort, shuffle seed, and batch count when sheet opens or cards change
   useEffect(() => {
     if (isOpen) {
@@ -123,34 +114,12 @@ export const MatchingCardsSheet: React.FC<MatchingCardsSheetProps> = ({
     [sortedCards, visibleCount]
   );
 
-  const [shouldRender, setShouldRender] = useState(isOpen);
-  const [isVisible, setIsVisible] = useState(false);
-
-  useEffect(() => {
-    let raf1: number;
-    let raf2: number;
-    let timer: number;
-
-    if (isOpen) {
-      setShouldRender(true);
-      raf1 = window.requestAnimationFrame(() => {
-        raf2 = window.requestAnimationFrame(() => {
-          setIsVisible(true);
-        });
-      });
-    } else {
-      setIsVisible(false);
-      timer = window.setTimeout(() => {
-        setShouldRender(false);
-      }, 300);
-    }
-
-    return () => {
-      window.cancelAnimationFrame(raf1);
-      window.cancelAnimationFrame(raf2);
-      window.clearTimeout(timer);
-    };
-  }, [isOpen]);
+  const { shouldRender, isVisible } = useOverlayTransition({
+    isOpen,
+    onClose,
+    exitDurationMs: 300,
+    disableEscape: Boolean(previewCard)
+  });
 
   if (!shouldRender) return null;
 
@@ -299,9 +268,7 @@ export const MatchingCardsSheet: React.FC<MatchingCardsSheetProps> = ({
                 {visibleCards.map((card) => {
                   const isSelected = card.id === currentCardId;
                   const isFav = favorites.includes(card.id);
-                  const imageUrl =
-                    card.card_images?.[0]?.image_url_small ||
-                    `https://images.ygoprodeck.com/images/cards_small/${card.id}.jpg`;
+                  const imageUrl = getCardSmallImageUrl(card);
 
                   return (
                     <div
@@ -332,11 +299,11 @@ export const MatchingCardsSheet: React.FC<MatchingCardsSheetProps> = ({
                       className={`group flex flex-col items-center p-2 rounded-xl text-left transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-400 ${
                         isSelected
                           ? 'bg-amber-500/15 border-2 border-amber-400 shadow-md shadow-amber-500/20 ring-1 ring-amber-400/50'
-                          : 'bg-slate-950/70 hover:bg-slate-800 border border-slate-800 hover:border-amber-500/50 shadow-sm'
+                          : 'bg-slate-950/70 hover:bg-slate-800 border border-slate-800 hover:border-amber-500/30 shadow-sm'
                       }`}
                     >
                       {/* Card Art Portrait */}
-                      <div className="relative w-full aspect-[3/4.4] overflow-hidden rounded-lg bg-slate-950 border border-slate-800 group-hover:border-amber-400/80 transition-all flex items-center justify-center">
+                      <div className="relative w-full aspect-[3/4.4] overflow-hidden rounded-lg bg-slate-950 border border-slate-800 group-hover:border-amber-400/48 transition-all flex items-center justify-center">
                         <img
                           src={imageUrl}
                           alt={card.name}

@@ -1,9 +1,15 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { YugiohCard } from '../types/card';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { addCardToHistory, toggleFavorite } from '../store/slices/historySlice';
 import { recordNewDraw, setCurrentCard } from '../store/slices/cardsSlice';
 import { useModalBackHandler } from '../hooks/useModalBackHandler';
+import { useOverlayTransition } from '../hooks/useOverlayTransition';
+import {
+  getFormattedCardTypeLine,
+  getCardSmallImageUrl,
+  getFormattedTcgPrice
+} from '../utils/cardFormatters';
 
 interface CardPreviewModalProps {
   card: YugiohCard | null;
@@ -14,54 +20,6 @@ interface CardPreviewModalProps {
   synergyBadge?: string;
   synergyReason?: string;
   isAiSuggested?: boolean;
-}
-
-function getFormattedCardTypeLine(card: YugiohCard): {
-  fullType: string;
-  accentClass: string;
-} {
-  const rawType = card.type || 'Monster Card';
-  const typeLower = rawType.toLowerCase();
-  const race = card.race || '';
-
-  if (typeLower.includes('spell')) {
-    const prefix = race && !rawType.toLowerCase().startsWith(race.toLowerCase()) ? `${race} ` : '';
-    return {
-      fullType: `${prefix}${rawType}`,
-      accentClass: 'text-emerald-300'
-    };
-  }
-
-  if (typeLower.includes('trap')) {
-    const prefix = race && !rawType.toLowerCase().startsWith(race.toLowerCase()) ? `${race} ` : '';
-    return {
-      fullType: `${prefix}${rawType}`,
-      accentClass: 'text-pink-300'
-    };
-  }
-
-  const fullMonsterType = race ? `${race} / ${rawType}` : rawType;
-
-  if (typeLower.includes('xyz')) {
-    return { fullType: fullMonsterType, accentClass: 'text-zinc-200' };
-  }
-  if (typeLower.includes('synchro')) {
-    return { fullType: fullMonsterType, accentClass: 'text-slate-100' };
-  }
-  if (typeLower.includes('fusion')) {
-    return { fullType: fullMonsterType, accentClass: 'text-purple-300' };
-  }
-  if (typeLower.includes('link')) {
-    return { fullType: fullMonsterType, accentClass: 'text-sky-300' };
-  }
-  if (typeLower.includes('ritual')) {
-    return { fullType: fullMonsterType, accentClass: 'text-blue-300' };
-  }
-  if (typeLower.includes('pendulum')) {
-    return { fullType: fullMonsterType, accentClass: 'text-teal-300' };
-  }
-
-  return { fullType: fullMonsterType, accentClass: 'text-amber-300' };
 }
 
 export const CardPreviewModal: React.FC<CardPreviewModalProps> = ({
@@ -78,65 +36,29 @@ export const CardPreviewModal: React.FC<CardPreviewModalProps> = ({
   const favorites = useAppSelector((state) => state.history.favorites);
 
   const [renderedCard, setRenderedCard] = useState<YugiohCard | null>(card);
-  const [isVisible, setIsVisible] = useState(false);
-
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
 
   // Support mobile hardware back button & desktop browser back arrow via centralized stack hook
   useModalBackHandler(Boolean(card), onClose);
 
-  // Sync rendered card and animate open/close
-  useEffect(() => {
-    let raf1: number;
-    let raf2: number;
-    let timer: number;
+  const { shouldRender, isVisible } = useOverlayTransition({
+    isOpen: Boolean(card),
+    onClose,
+    exitDurationMs: 200,
+    captureEscape: true
+  });
 
+  useEffect(() => {
     if (card) {
       setRenderedCard(card);
-      raf1 = window.requestAnimationFrame(() => {
-        raf2 = window.requestAnimationFrame(() => {
-          setIsVisible(true);
-        });
-      });
-    } else {
-      setIsVisible(false);
-      timer = window.setTimeout(() => {
-        setRenderedCard(null);
-      }, 200);
+    } else if (!shouldRender) {
+      setRenderedCard(null);
     }
+  }, [card, shouldRender]);
 
-    return () => {
-      window.cancelAnimationFrame(raf1);
-      window.cancelAnimationFrame(raf2);
-      window.clearTimeout(timer);
-    };
-  }, [card]);
-
-  // Capture Escape key before parent sheet so Escape only closes the preview window first
-  useEffect(() => {
-    if (!card) return;
-
-    const handleKeyDownCapture = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        onCloseRef.current();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDownCapture, true);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDownCapture, true);
-    };
-  }, [card]);
-
-  if (!renderedCard) return null;
+  if (!shouldRender || !renderedCard) return null;
 
   const isFav = favorites.includes(renderedCard.id);
-  const smallImageUrl =
-    renderedCard.card_images?.[0]?.image_url_small ||
-    `https://images.ygoprodeck.com/images/cards_small/${renderedCard.id}.jpg`;
+  const smallImageUrl = getCardSmallImageUrl(renderedCard);
 
   const typeLower = (renderedCard.type || '').toLowerCase();
   const isMonster = renderedCard.atk !== undefined || typeLower.includes('monster');
@@ -151,15 +73,7 @@ export const CardPreviewModal: React.FC<CardPreviewModalProps> = ({
     typeof renderedCard.scale === 'number' && !isNaN(renderedCard.scale) && renderedCard.scale >= 0;
 
   const { fullType, accentClass } = getFormattedCardTypeLine(renderedCard);
-
-  // Extract TCGplayer price
-  const rawPrice = renderedCard.card_prices?.[0]?.tcgplayer_price;
-  const tcgPrice =
-    rawPrice && rawPrice !== '0.00' && rawPrice !== '0'
-      ? rawPrice.startsWith('$')
-        ? rawPrice.slice(1)
-        : rawPrice
-      : renderedCard.card_prices?.[0]?.cardmarket_price || '0.99';
+  const tcgPrice = getFormattedTcgPrice(renderedCard);
 
   return (
     <div

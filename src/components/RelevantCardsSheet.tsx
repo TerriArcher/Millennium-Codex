@@ -13,6 +13,8 @@ import { setCurrentCard, setSimilarTargetCard } from '../store/slices/cardsSlice
 import { CardHoverTooltip } from './CardHoverTooltip';
 import { CardPreviewModal } from './CardPreviewModal';
 import { useModalBackHandler } from '../hooks/useModalBackHandler';
+import { useOverlayTransition } from '../hooks/useOverlayTransition';
+import { getCardSmallImageUrl } from '../utils/cardFormatters';
 
 interface RelevantCardsSheetProps {
   isOpen: boolean;
@@ -70,10 +72,7 @@ export const RelevantCardsSheet: React.FC<RelevantCardsSheetProps> = ({
   const [hoveredCard, setHoveredCard] = useState<YugiohCard | null>(null);
   const [hoveredRect, setHoveredRect] = useState<DOMRect | null>(null);
   const [previewItem, setPreviewItem] = useState<RelevantCardRecommendation | null>(null);
-
-  const [shouldRender, setShouldRender] = useState(isOpen);
-  const [isVisible, setIsVisible] = useState(false);
-  const [isEntranceComplete, setIsEntranceComplete] = useState(false);
+  const [isCardSwitchTransitioning, setIsCardSwitchTransitioning] = useState(false);
   const transitionTimerRef = useRef<number | null>(null);
 
   // Keep latest activeCard in a ref so effects keyed on activeCard.id don't re-run on parent re-renders
@@ -83,46 +82,23 @@ export const RelevantCardsSheet: React.FC<RelevantCardsSheetProps> = ({
   // Support desktop browser back arrow & mobile back button
   useModalBackHandler(isOpen, onClose);
 
-  // Animate top-down drawer entrance and exit, marking entrance complete only after the 300ms slide-down finishes
+  const { shouldRender, isVisible, isEntranceComplete: isOverlayEntered } = useOverlayTransition({
+    isOpen,
+    onClose,
+    exitDurationMs: 300,
+    entranceDurationMs: 320,
+    disableEscape: Boolean(previewItem)
+  });
+
+  const isEntranceComplete = isOverlayEntered && !isCardSwitchTransitioning;
+
   useEffect(() => {
-    let raf1: number;
-    let raf2: number;
-    let timer: number;
-    let entranceTimer: number;
-
-    if (transitionTimerRef.current !== null) {
-      window.clearTimeout(transitionTimerRef.current);
-      transitionTimerRef.current = null;
-    }
-
-    if (isOpen) {
-      setShouldRender(true);
-      setIsEntranceComplete(false);
-      raf1 = window.requestAnimationFrame(() => {
-        raf2 = window.requestAnimationFrame(() => {
-          setIsVisible(true);
-          entranceTimer = window.setTimeout(() => {
-            setIsEntranceComplete(true);
-          }, 320);
-        });
-      });
-    } else {
-      setIsVisible(false);
-      setIsEntranceComplete(false);
+    if (!isOpen) {
+      setIsCardSwitchTransitioning(false);
       setHoveredCard(null);
       setHoveredRect(null);
       setPreviewItem(null);
-      timer = window.setTimeout(() => {
-        setShouldRender(false);
-      }, 300);
     }
-
-    return () => {
-      window.cancelAnimationFrame(raf1);
-      window.cancelAnimationFrame(raf2);
-      window.clearTimeout(timer);
-      window.clearTimeout(entranceTimer);
-    };
   }, [isOpen]);
 
   // Cleanup any transition timer on unmount
@@ -133,17 +109,6 @@ export const RelevantCardsSheet: React.FC<RelevantCardsSheetProps> = ({
       }
     };
   }, []);
-
-  // Close on Escape key (only when preview modal is not open)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !previewItem) onClose();
-    };
-    if (isOpen) {
-      window.addEventListener('keydown', handleKeyDown);
-    }
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose, previewItem]);
 
   // Reset AI cards state when activeCard.id changes
   useEffect(() => {
@@ -278,9 +243,7 @@ export const RelevantCardsSheet: React.FC<RelevantCardsSheetProps> = ({
 
   if (!shouldRender) return null;
 
-  const sourceThumb =
-    activeCard.card_images?.[0]?.image_url_small ||
-    `https://images.ygoprodeck.com/images/cards_small/${activeCard.id}.jpg`;
+  const sourceThumb = getCardSmallImageUrl(activeCard);
 
   const isPoolReloading = isLoadingRuleBased || (includeAiSynergies && isLoadingAi);
 
@@ -304,11 +267,6 @@ export const RelevantCardsSheet: React.FC<RelevantCardsSheetProps> = ({
 
       {/* Top-Down Slide-In / Slide-Out Window */}
       <div
-        onTransitionEnd={(e) => {
-          if (e.target === e.currentTarget && isOpen && isVisible) {
-            setIsEntranceComplete(true);
-          }
-        }}
         className={`relative z-10 w-full max-w-7xl mx-auto bg-slate-900 border-b border-slate-800 rounded-b-2xl shadow-2xl flex flex-col max-h-[86vh] sm:max-h-[82vh] transform transition-transform duration-300 ease-in-out ${
           isVisible ? 'translate-y-0' : '-translate-y-full'
         }`}
@@ -589,9 +547,7 @@ export const RelevantCardsSheet: React.FC<RelevantCardsSheetProps> = ({
               {unifiedRecommendations.map((item) => {
                 const { card, badge, badgeType, reason, isAiSuggested } = item;
                 const isFav = favorites.includes(card.id);
-                const imageUrl =
-                  card.card_images?.[0]?.image_url_small ||
-                  `https://images.ygoprodeck.com/images/cards_small/${card.id}.jpg`;
+                const imageUrl = getCardSmallImageUrl(card);
 
                 return (
                   <div
@@ -621,12 +577,12 @@ export const RelevantCardsSheet: React.FC<RelevantCardsSheetProps> = ({
                     }}
                     className={`group flex flex-col items-center p-2 rounded-xl text-left transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-400 ${
                       isAiSuggested
-                        ? 'bg-purple-950/25 hover:bg-slate-800 border border-purple-500/40 hover:border-purple-400 shadow-sm'
-                        : 'bg-slate-950/70 hover:bg-slate-800 border border-slate-800 hover:border-amber-500/50 shadow-sm'
+                        ? 'bg-purple-950/25 hover:bg-slate-800 border border-purple-500/40 hover:border-purple-400/60 shadow-sm'
+                        : 'bg-slate-950/70 hover:bg-slate-800 border border-slate-800 hover:border-amber-500/30 shadow-sm'
                     }`}
                   >
                     {/* Card Art Portrait */}
-                    <div className="relative w-full aspect-[3/4.4] overflow-hidden rounded-lg bg-slate-950 border border-slate-800 group-hover:border-amber-400/80 transition-all flex items-center justify-center">
+                    <div className="relative w-full aspect-[3/4.4] overflow-hidden rounded-lg bg-slate-950 border border-slate-800 group-hover:border-amber-400/48 transition-all flex items-center justify-center">
                       <img
                         src={imageUrl}
                         alt={card.name}
@@ -723,13 +679,13 @@ export const RelevantCardsSheet: React.FC<RelevantCardsSheetProps> = ({
         }}
         onViewSimilarCards={(selected) => {
           setPreviewItem(null);
-          setIsEntranceComplete(false);
+          setIsCardSwitchTransitioning(true);
           dispatch(setSimilarTargetCard(selected));
           if (transitionTimerRef.current !== null) {
             window.clearTimeout(transitionTimerRef.current);
           }
           transitionTimerRef.current = window.setTimeout(() => {
-            setIsEntranceComplete(true);
+            setIsCardSwitchTransitioning(false);
             transitionTimerRef.current = null;
           }, 220);
         }}

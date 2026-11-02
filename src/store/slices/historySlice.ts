@@ -136,8 +136,17 @@ export const historySlice = createSlice({
         saveFavoriteCardsToStorage(state.favoriteCards, state.favorites);
       }
     },
-    clearHistory: (state) => {
-      state.history = [];
+    removeCardFromHistory: (state, action: PayloadAction<number>) => {
+      state.history = state.history.filter((c) => c.id !== action.payload);
+    },
+    clearHistory: (state, action: PayloadAction<YugiohCard | undefined>) => {
+      if (action.payload) {
+        const current = normalizeCard(action.payload);
+        const existing = state.history.find((c) => c.id === current.id);
+        state.history = [existing || current];
+      } else {
+        state.history = state.history.length > 0 ? [state.history[0]] : [];
+      }
     },
     toggleFavorite: (
       state,
@@ -206,6 +215,7 @@ export const historySlice = createSlice({
 
 export const {
   addCardToHistory,
+  removeCardFromHistory,
   clearHistory,
   toggleFavorite,
   removeFavorite,

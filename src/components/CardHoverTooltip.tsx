@@ -1,99 +1,11 @@
 import React from 'react';
 import { YugiohCard } from '../types/card';
 import { Star, Swords, Shield } from 'lucide-react';
+import { getFormattedCardTypeLine } from '../utils/cardFormatters';
 
 interface CardHoverTooltipProps {
   card: YugiohCard | null;
   anchorRect: DOMRect | null;
-}
-
-function getFormattedCardTypeLine(card: YugiohCard): {
-  fullType: string;
-  accentClass: string;
-  borderClass: string;
-  bgClass: string;
-} {
-  const rawType = card.type || 'Monster Card';
-  const typeLower = rawType.toLowerCase();
-  const race = card.race || '';
-
-  if (typeLower.includes('spell')) {
-    const prefix = race && !rawType.toLowerCase().startsWith(race.toLowerCase()) ? `${race} ` : '';
-    return {
-      fullType: `${prefix}${rawType}`,
-      accentClass: 'text-emerald-300',
-      borderClass: 'border-emerald-500/40',
-      bgClass: 'bg-emerald-950/50'
-    };
-  }
-
-  if (typeLower.includes('trap')) {
-    const prefix = race && !rawType.toLowerCase().startsWith(race.toLowerCase()) ? `${race} ` : '';
-    return {
-      fullType: `${prefix}${rawType}`,
-      accentClass: 'text-pink-300',
-      borderClass: 'border-pink-500/40',
-      bgClass: 'bg-pink-950/50'
-    };
-  }
-
-  const fullMonsterType = race ? `${race} / ${rawType}` : rawType;
-
-  if (typeLower.includes('xyz')) {
-    return {
-      fullType: fullMonsterType,
-      accentClass: 'text-zinc-200',
-      borderClass: 'border-zinc-500/50',
-      bgClass: 'bg-zinc-900/90'
-    };
-  }
-  if (typeLower.includes('synchro')) {
-    return {
-      fullType: fullMonsterType,
-      accentClass: 'text-slate-100',
-      borderClass: 'border-slate-400/50',
-      bgClass: 'bg-slate-800/80'
-    };
-  }
-  if (typeLower.includes('fusion')) {
-    return {
-      fullType: fullMonsterType,
-      accentClass: 'text-purple-300',
-      borderClass: 'border-purple-500/40',
-      bgClass: 'bg-purple-950/50'
-    };
-  }
-  if (typeLower.includes('link')) {
-    return {
-      fullType: fullMonsterType,
-      accentClass: 'text-sky-300',
-      borderClass: 'border-sky-500/40',
-      bgClass: 'bg-sky-950/50'
-    };
-  }
-  if (typeLower.includes('ritual')) {
-    return {
-      fullType: fullMonsterType,
-      accentClass: 'text-blue-300',
-      borderClass: 'border-blue-500/40',
-      bgClass: 'bg-blue-950/50'
-    };
-  }
-  if (typeLower.includes('pendulum')) {
-    return {
-      fullType: fullMonsterType,
-      accentClass: 'text-teal-300',
-      borderClass: 'border-teal-500/40',
-      bgClass: 'bg-teal-950/50'
-    };
-  }
-
-  return {
-    fullType: fullMonsterType,
-    accentClass: 'text-amber-300',
-    borderClass: 'border-amber-500/40',
-    bgClass: 'bg-amber-950/40'
-  };
 }
 
 export const CardHoverTooltip: React.FC<CardHoverTooltipProps> = ({ card, anchorRect }) => {

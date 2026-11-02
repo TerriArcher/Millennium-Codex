@@ -1,30 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { YugiohCard, CardFilterState } from '../types/card';
+import { YugiohCard } from '../types/card';
 import { FilterBar } from '../components/FilterBar';
 import { CardDisplay } from '../components/CardDisplay';
 import { Toast } from '../components/Toast';
-import { FALLBACK_CARDS, INITIAL_START_CARD } from '../data/fallbackCards';
+import { INITIAL_START_CARD } from '../data/fallbackCards';
 import {
-  fetchRandomCardFromApi,
-  filterFallbackCards,
-  getAllMatchingCards,
   getMatchingCardsCount,
   warmRandomCardQueue
 } from '../services/ygoprodeckApi';
-import { store } from '../store';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import {
   setCurrentCard,
   setTotalMatches,
-  setCardLoading,
-  setCardError,
-  setIsMatchingSheetOpen,
-  setMatchingCards,
-  setIsMatchingLoading,
-  recordNewDraw
+  setCardError
 } from '../store/slices/cardsSlice';
 import { setAllFilters, resetFilters } from '../store/slices/filtersSlice';
 import { addCardToHistory } from '../store/slices/historySlice';
+import { useCardActions } from '../hooks/useCardActions';
 import { AlertCircle, Compass } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -41,74 +33,8 @@ export const CardRandomizerPage: React.FC = () => {
   const totalMatches = useAppSelector((state) => state.cards.totalMatches);
   const errorMsg = useAppSelector((state) => state.cards.error);
 
-  // Cycle reset toast notification
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-
-  // Fetch a random card from the prefetch queue or bounded filter cache
-  const fetchRandomCard = async (appliedFilters?: CardFilterState) => {
-    const state = store.getState();
-    if (
-      state.cards.isLoading ||
-      state.history.isQuickDrawing ||
-      state.cards.isCardAnimating
-    ) {
-      return;
-    }
-    dispatch(setCardLoading(true));
-    dispatch(setCardError(null));
-
-    // Always check and retain the active filters from Redux store first
-    const activeFilters = appliedFilters !== undefined ? appliedFilters : store.getState().filters;
-
-    try {
-      const data = await fetchRandomCardFromApi(activeFilters, currentCard?.id);
-
-      if (data.card) {
-        // Double check client-side: never display the same card if another can be drawn
-        if (currentCard && data.card.id === currentCard.id && data.totalMatches > 1) {
-          const retryData = await fetchRandomCardFromApi(activeFilters, currentCard.id);
-          if (retryData.card) {
-            dispatch(recordNewDraw());
-            dispatch(setCurrentCard(retryData.card));
-            dispatch(setTotalMatches(retryData.totalMatches));
-            dispatch(addCardToHistory(retryData.card));
-            if (retryData.isCycleReset) {
-              setToastMessage('All matching cards drawn! Starting a new cycle.');
-            }
-            dispatch(setCardLoading(false));
-            return;
-          }
-        }
-
-        dispatch(recordNewDraw());
-        dispatch(setCurrentCard(data.card));
-        dispatch(setTotalMatches(data.totalMatches));
-        dispatch(addCardToHistory(data.card));
-
-        if (data.isCycleReset) {
-          setToastMessage('All matching cards drawn! Starting a new cycle.');
-        }
-      }
-    } catch (err: any) {
-      if (err?.status === 404) {
-        dispatch(setCardError('No card matching this exact criteria was found. Try loosening the filters.'));
-        return;
-      }
-      console.warn('API fetch error, using local seed fallback:', err);
-      // Select non-recent card from filtered fallback pool
-      let pool = filterFallbackCards(activeFilters, currentCard?.id);
-      if (pool.length === 0) pool = FALLBACK_CARDS;
-      if (currentCard && pool.length > 1) {
-        pool = pool.filter((c) => c.id !== currentCard.id);
-      }
-      const fallback = pool[Math.floor(Math.random() * pool.length)];
-      dispatch(recordNewDraw());
-      dispatch(setCurrentCard(fallback));
-      dispatch(addCardToHistory(fallback));
-    } finally {
-      dispatch(setCardLoading(false));
-    }
-  };
+  const { drawRandomCard, openMatchingCardsSheet } = useCardActions();
 
   // Initial draw if no card is present, plus warm the random prefetch queue
   useEffect(() => {
@@ -157,58 +83,9 @@ export const CardRandomizerPage: React.FC = () => {
     };
   }, [filters, dispatch]);
 
-  // Open the bottom sheet and fetch all matching cards
-  const handleOpenMatchingCards = async () => {
-    dispatch(setIsMatchingSheetOpen(true));
-    dispatch(setIsMatchingLoading(true));
-    try {
-      const allCards = await getAllMatchingCards(filters);
-      dispatch(setMatchingCards(allCards));
-    } catch (err) {
-      console.warn('Failed to load matching cards for sheet:', err);
-      dispatch(setMatchingCards([]));
-    } finally {
-      dispatch(setIsMatchingLoading(false));
-    }
-  };
-
-  // Card selection from bottom sheet or direct promotion
-  const handleSelectCard = (card: YugiohCard) => {
-    dispatch(setCurrentCard(card));
-    dispatch(addCardToHistory(card));
-  };
-
   // Browsing history through the carousel without altering chronological history stack
   const handleBrowseHistory = (card: YugiohCard) => {
     dispatch(setCurrentCard(card));
-  };
-
-  // Chained Exploration Handler
-  const handleExploreStat = (statFilter: {
-    attribute?: string;
-    level?: number;
-    race?: string;
-    type?: string;
-    superType?: string;
-    archetype?: string;
-    scale?: number;
-    atk?: number;
-    def?: number;
-  }) => {
-    const state = store.getState();
-    if (
-      state.cards.isLoading ||
-      state.history.isQuickDrawing ||
-      state.cards.isCardAnimating
-    ) {
-      return;
-    }
-    const updatedFilters: CardFilterState = {
-      ...filters,
-      ...statFilter
-    };
-    dispatch(setAllFilters(updatedFilters));
-    fetchRandomCard(updatedFilters);
   };
 
   const handleResetFilters = () => {
@@ -242,9 +119,14 @@ export const CardRandomizerPage: React.FC = () => {
         onFilterChange={(newFilters) => {
           dispatch(setAllFilters(newFilters));
         }}
-        onDrawRandom={() => fetchRandomCard()}
+        onDrawRandom={() =>
+          void drawRandomCard({
+            onCycleReset: () =>
+              setToastMessage('All matching cards drawn! Starting a new cycle.')
+          })
+        }
         onResetFilters={handleResetFilters}
-        onOpenMatchingCards={handleOpenMatchingCards}
+        onOpenMatchingCards={() => void openMatchingCardsSheet()}
         isLoading={isDrawDisabled}
         totalMatches={totalMatches}
       />

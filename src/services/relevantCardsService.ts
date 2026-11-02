@@ -3,6 +3,7 @@ import {
   getAllMatchingCards,
   fetchCardsByNamesBatch
 } from './ygoprodeckApi';
+import { buildFallbackSynergySuggestions } from '../utils/synergyFallback';
 
 export type SynergyBadgeType = 'mention' | 'archetype' | 'stat' | 'ai';
 
@@ -327,193 +328,6 @@ export async function getRuleBasedRelevantCards(
   return Array.from(combined.values()).slice(0, 18);
 }
 
-function buildClientFallbackSynergySuggestions(
-  card: YugiohCard,
-  excludeNames: string[]
-): Array<{ name: string; category: string; reason: string }> {
-  const excludeSet = new Set(excludeNames.map((n) => n.trim().toLowerCase()));
-  const typeLower = String(card.type || '').toLowerCase();
-  const attrUpper = String(card.attribute || '').toUpperCase();
-  const raceLower = String(card.race || '').toLowerCase();
-  const level = card.level;
-  const candidates: Array<{ name: string; category: string; reason: string }> = [];
-
-  if (level === 8) {
-    candidates.push(
-      {
-        name: 'Trade-In',
-        category: 'AI Draw Engine',
-        reason: `Discards Level 8 "${card.name}" to draw 2 cards while loading the Graveyard.`
-      },
-      {
-        name: 'Number 38: Hope Harbinger Dragon Titanic Galaxy',
-        category: 'AI Rank 8 Boss',
-        reason: `High-impact Rank 8 Xyz monster easily overlaid using Level 8 monsters like "${card.name}".`
-      },
-      {
-        name: 'Dingirsu, the Orcust of the Evening Star',
-        category: 'AI Rank 8 Utility',
-        reason: `Provides non-targeting removal and destruction protection for Rank 8 setups.`
-      }
-    );
-  }
-  if (level === 7) {
-    candidates.push(
-      {
-        name: 'Sacred Sword of Seven Stars',
-        category: 'AI Draw Engine',
-        reason: `Banishes a Level 7 monster like "${card.name}" to draw 2 cards and accelerate deck cycling.`
-      },
-      {
-        name: 'Number 11: Big Eye',
-        category: 'AI Rank 7 Xyz',
-        reason: `Rank 7 Xyz play that permanently steals an opponent's monster using Level 7 materials.`
-      }
-    );
-  }
-  if (level === 4) {
-    candidates.push(
-      {
-        name: 'Time Thief Redoer',
-        category: 'AI Rank 4 Control',
-        reason: `Versatile Rank 4 Xyz monster that pairs with Level 4 extenders like "${card.name}".`
-      },
-      {
-        name: 'Bagooska the Terribly Tired Tapir',
-        category: 'AI Rank 4 Lock',
-        reason: `Defensive Rank 4 Xyz option easily summoned alongside "${card.name}".`
-      }
-    );
-  }
-  if (raceLower.includes('dragon')) {
-    candidates.push(
-      {
-        name: 'Dragon Shrine',
-        category: 'AI GY Setup',
-        reason: `Sends Dragon monsters directly from Deck to Graveyard to trigger recursion.`
-      },
-      {
-        name: 'Return of the Dragon Lords',
-        category: 'AI Revival & Shield',
-        reason: `Revives high-level Dragons from the GY and banishes itself to protect "${card.name}".`
-      },
-      {
-        name: 'Hieratic Seal of the Heavenly Spheres',
-        category: 'AI Dragon Link',
-        reason: `Tributes a Dragon to bounce an opponent's card and summon a Dragon from the Deck.`
-      }
-    );
-  }
-  if (raceLower.includes('spellcaster')) {
-    candidates.push(
-      {
-        name: 'Selene, Queen of the Master Magicians',
-        category: 'AI Link Extender',
-        reason: `Accumulates Spell Counters to Special Summon Spellcasters like "${card.name}" from GY.`
-      },
-      {
-        name: "Magicians' Souls",
-        category: 'AI Consistency',
-        reason: `Sends high-level Spellcasters from Deck to GY and converts extra Spells/Traps into draws.`
-      }
-    );
-  }
-  if (raceLower.includes('warrior')) {
-    candidates.push(
-      {
-        name: 'Reinforcement of the Army',
-        category: 'AI Searcher',
-        reason: `Searches Warrior combo starters and extenders to pair with "${card.name}".`
-      },
-      {
-        name: 'Isolde, Two Tales of the Noble Knights',
-        category: 'AI Warrior Link',
-        reason: `Searches a Warrior on Link Summon and Special Summons another Warrior from the Deck.`
-      }
-    );
-  }
-  if (attrUpper === 'DARK') {
-    candidates.push(
-      {
-        name: 'Allure of Darkness',
-        category: 'AI Draw Engine',
-        reason: `Draws 2 cards by banishing a DARK monster, smoothing hands built around "${card.name}".`
-      },
-      {
-        name: 'Dharc the Dark Charmer, Gloomy',
-        category: 'AI Link Climber',
-        reason: `Links using DARK monsters like "${card.name}" and revives a DARK monster from the opponent's GY.`
-      }
-    );
-  }
-  if (attrUpper === 'LIGHT') {
-    candidates.push({
-      name: 'Lyna the Light Charmer, Lustrous',
-      category: 'AI Link Climber',
-      reason: `Uses LIGHT monsters like "${card.name}" as Link material and searches LIGHT follow-up on destruction.`
-    });
-  }
-  if (typeLower.includes('spell') || typeLower.includes('trap')) {
-    candidates.push(
-      {
-        name: 'Triple Tactics Thrust',
-        category: 'AI Spell/Trap Tutor',
-        reason: `Sets or searches key Normal Spells/Traps to complement "${card.name}".`
-      },
-      {
-        name: 'Lord of the Heavenly Prison',
-        category: 'AI Backrow Shield',
-        reason: `Protects set Spells and Traps from destruction and sets a Spell/Trap directly from the Deck.`
-      }
-    );
-  }
-
-  candidates.push(
-    {
-      name: 'Monster Reborn',
-      category: 'AI Revival Tech',
-      reason: `Extends plays by Special Summoning "${card.name}" or key combo pieces from either Graveyard.`
-    },
-    {
-      name: 'Called by the Grave',
-      category: 'AI Combo Protection',
-      reason: `Insulates "${card.name}"'s effects and summon sequences against hand traps.`
-    },
-    {
-      name: 'Infinite Impermanence',
-      category: 'AI Board Breaker',
-      reason: `Negates opposing monster effects to clear the way for "${card.name}".`
-    },
-    {
-      name: 'S:P Little Knight',
-      category: 'AI Link Utility',
-      reason: `Banishes threats on summon and temporarily banishes "${card.name}" to dodge removal.`
-    },
-    {
-      name: 'Foolish Burial',
-      category: 'AI GY Starter',
-      reason: `Sends key monsters directly from the Deck to the GY to enable graveyard synergies.`
-    },
-    {
-      name: 'Crossout Designator',
-      category: 'AI Handtrap Shield',
-      reason: `Protects high-commitment plays involving "${card.name}" from disruption.`
-    }
-  );
-
-  const selfLower = String(card.name || '').trim().toLowerCase();
-  const filtered: Array<{ name: string; category: string; reason: string }> = [];
-  const seen = new Set<string>();
-  for (const item of candidates) {
-    const lower = item.name.toLowerCase();
-    if (lower === selfLower || excludeSet.has(lower) || seen.has(lower)) continue;
-    seen.add(lower);
-    filtered.push(item);
-    if (filtered.length >= 6) break;
-  }
-  return filtered;
-}
-
 const inFlightAiRequests = new Map<number, Promise<RelevantCardRecommendation[]>>();
 
 /**
@@ -573,7 +387,7 @@ export async function getAiSuggestedRelevantCards(
           }
 
           if (suggestions.length === 0) {
-            suggestions = buildClientFallbackSynergySuggestions(card, excludeNames);
+            suggestions = buildFallbackSynergySuggestions(card, excludeNames);
           }
 
           if (suggestions.length === 0) {

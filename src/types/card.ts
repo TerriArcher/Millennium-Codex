@@ -10,6 +10,8 @@ export interface CardSet {
   set_code: string;
   set_rarity: string;
   set_price?: string;
+  tcg_date?: string;
+  release_year?: number;
 }
 
 export interface CardPrice {

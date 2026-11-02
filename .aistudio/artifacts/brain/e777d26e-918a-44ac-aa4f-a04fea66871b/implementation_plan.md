@@ -1,85 +1,71 @@
-# Vercel Serverless API & Gemini Synergy Deployment Plan
+# Codebase Cleanup, Deduplication & Hardening Plan
 
-Configure full cross-platform deployment compatibility so the Yu-Gi-Oh! Random Card Generator & Synergy Explorer works identically on Vercel, Node/Express hosts, and local development—ensuring AI Suggested Synergy and all card API endpoints route to serverless handlers and call the official `@google/genai` SDK models (`gemini-3.8-flash` and `gemini-3.1-flash-lite`) with automatic curated synergy fallbacks.
-
-## User Review & Critical Decisions
-
-- **Full Serverless Endpoint Coverage (Confirmed)**: All backend API endpoints (`/api/cards/synergy`, `/api/cards/random`, `/api/cards/filters`, and `/api/resources`) will be exposed as Vercel Serverless Functions alongside the existing Express server so both Vercel and Node/container platforms work out of the box.
-- **Automatic Tactical Synergy Fallback (Confirmed)**: When `GEMINI_API_KEY` is not configured in the hosting environment or if the Gemini API request times out, `/api/cards/synergy` will automatically return curated tactical synergy fallback cards (`buildFallbackSynergySuggestions`) so the "AI Suggested" tab always populates cleanly.
-- **Required Vercel Environment Variable Setup**: To enable live Gemini AI synergy reasoning on Vercel, add `GEMINI_API_KEY` in **Vercel Dashboard → Project Settings → Environment Variables** (enabled for Production, Preview, and Development) and redeploy.
-
----
-
-## 1. Overview & Core Concept
-
-When deployed to Vercel, a Vite application serves static frontend assets from the build output directory while routing `/api/*` requests to serverless functions. Previously, two issues prevented AI Suggested Synergy from working on Vercel:
-1. **SPA Catch-All Rewrite Intercepting API Calls**: The routing configuration rewrote every path (`/(.*)`) to `/index.html`, causing `POST /api/cards/synergy` and `GET /api/cards/*` requests on Vercel to return the HTML entrypoint instead of JSON from the backend.
-2. **Express-Only Backend Mounting & Model Alias Update**: The API routes were only mounted inside the standalone Express server (`server.ts`) rather than exported for Vercel's serverless runtime, and the Gemini model list used an older preview identifier with `ThinkingLevel.MINIMAL`.
-
-This plan decouples the backend API logic into shared, runtime-agnostic handlers that are mounted by both Express (`server.ts`) and Vercel's `/api` serverless runtime, updates the routing rules so `/api/*` requests never get rewritten to `/index.html`, and configures `@google/genai` to use `gemini-3.8-flash` (`ThinkingLevel.LOW`) and `gemini-3.1-flash-lite` (`ThinkingLevel.MINIMAL`).
+## 1. Overview
+This plan addresses all findings from the codebase audit across four core pillars:
+1. **Dead Code & Unused Route Removal**: Remove the unused RTK Query slice (`ygoprodeckRtkApi`), unused backend routes (`/api/cards/random`, `/api/cards/filters`, `/api/resources`), dead component props/handlers, unused Redux actions, and unused dependencies/imports.
+2. **Logic & UI Deduplication**: Unify the 3x-duplicated synergy fallback builder, consolidate `/api/cards/synergy.ts` to re-export from `/src/server/apiHandlers.ts`, share card draw & matching-cards handlers across `App.tsx` and `CardRandomizerPage.tsx`, centralize card frame/price/image helpers, extract a shared `useOverlayTransition` hook for modals/sheets/drawers, and unify `HistoryDrawer` and `FavoritesDrawer` around a shared `CardListDrawer` component.
+3. **Security & Runtime Hardening**: Add strict request body size limits (`32 KB`), sanitize and cap all fields interpolated into the Gemini synergy prompt, add per-IP rate limiting and stricter CORS handling on `/api/cards/synergy`, bound `resolvedCardByNameCache`, and validate external `http(s):` URLs when normalizing cards from `localStorage`.
+4. **`CardDisplay.tsx` Modular Decomposition**: Hoist `useAnimatedStat` out of the `CardDisplay` render body into `/src/hooks/useAnimatedStat.ts` and decompose the 1,988-line `CardDisplay.tsx` into focused subcomponents (`CardCarousel3D`, `CardStatsGrid`, `CardSetsSection`).
 
 ---
 
-## 2. User Experience & Visual Design
+## 2. Phase-by-Phase Changes
 
-- **Seamless AI Suggested Synergy Tab**: Opening the **Similar Cards** drawer and switching to **AI Suggested** will invoke `POST /api/cards/synergy`, returning 6 to 8 tactical synergy cards with detailed 1-to-2 sentence synergy reasoning badges and role tags (`Combo Extender`, `Searcher / Starter`, `Boss / Payoff`, `Protection / Disruption`, `Engine / Support`).
-- **Zero-Downtime Fallback Resilience**: If a deployment environment lacks `GEMINI_API_KEY` or experiences upstream latency, the endpoint transparently responds with curated competitive staple and attribute/race-matched tactical cards so players never encounter an empty drawer or raw error screen.
-- **Consistent Multi-Platform Card Drawing & Filtering**: Random draws (`/api/cards/random`), dynamic filter catalogs (`/api/cards/filters`), and external duel links (`/api/resources`) respond with low-latency cached data on Vercel just as they do in local development.
+### Phase 1: Remove Unused / Dead Code & Endpoints
+- **Delete Unused Files**:
+  - `/src/store/api/ygoprodeckApi.ts` (unused RTK Query API slice).
+  - `/api/cards/random.ts`, `/api/cards/filters.ts`, `/api/resources.ts` (unused Vercel serverless endpoints).
+- **Clean Up Store & Server Entry Points**:
+  - `/src/store/index.ts`: Remove `ygoprodeckRtkApi` reducer and middleware registration.
+  - `/server.ts`: Remove unused routes `/api/cards/random`, `/api/cards/filters`, and `/api/resources`; configure `express.json({ limit: '32kb' })`.
+  - `/src/server/apiHandlers.ts`: Remove `handleRandomCard`, `handleCardFilters`, `handleResources`, and their supporting server-only cache/filter dead code, keeping only the hardened `handleCardSynergy` handler.
+- **Clean Up Unused Props, Actions, Handlers & Imports**:
+  - `/src/store/slices/filtersSlice.ts`: Remove unused `toggleFilterField` action and unused `typeOverride` field on `SetFilterFieldPayload`.
+  - `/src/pages/CardRandomizerPage.tsx`: Remove unused `handleSelectCard` and `handleExploreStat` functions.
+  - `/src/components/CardDisplay.tsx`: Remove unused `onExploreStat` prop from `CardDisplayProps` and unused `Maximize2`, `X` icon imports.
+  - `/src/pages/ResourcesPage.tsx`: Remove unused `ArrowRight` icon import.
+  - `/package.json`: Remove unused `"motion"` dependency.
+
+### Phase 2: Consolidate Duplicate Logic & UI Components
+- **Shared Synergy Fallback Module (`/src/utils/synergyFallback.ts`)**:
+  - Extract `buildFallbackSynergySuggestions` into `/src/utils/synergyFallback.ts` so both `/src/server/apiHandlers.ts` and `/src/services/relevantCardsService.ts` import a single implementation instead of maintaining 3 copies.
+- **Single Synergy Serverless Handler (`/api/cards/synergy.ts`)**:
+  - Replace the 449-line duplicate implementation in `/api/cards/synergy.ts` with a thin wrapper that delegates directly to `handleCardSynergy` from `../../src/server/apiHandlers.js`.
+- **Shared Card Formatting & URL Utilities (`/src/utils/cardFormatters.ts`)**:
+  - Centralize `getCardFrameTheme(card)`, `getFormattedCardTypeLine(card)`, `getCardSmallImageUrl(card)`, `getCardFullImageUrl(card)`, `getFormattedTcgPrice(card)`, and `sanitizeExternalHttpUrl(url)` for reuse across `CardDisplay`, `CardHoverTooltip`, `CardPreviewModal`, `MatchingCardsSheet`, `RelevantCardsSheet`, and `CardListDrawer`.
+- **Shared Draw & Matching-Pool Hook (`/src/hooks/useCardActions.ts`)**:
+  - Extract `drawRandomCard` and `openMatchingCardsSheet` into a shared custom hook used by both `App.tsx` (for Navbar's Quick Draw and matching-pool actions) and `CardRandomizerPage.tsx` so behavior (including cycle-reset feedback and duplicate avoidance) is 100% consistent.
+- **Shared Overlay Animation & Escape Hook (`/src/hooks/useOverlayTransition.ts`)**:
+  - Replace the 5x-duplicated `requestAnimationFrame` entrance/exit transition (`shouldRender`, `isVisible`) and `Escape` key listener in `HistoryDrawer`, `FavoritesDrawer`, `MatchingCardsSheet`, `RelevantCardsSheet`, and `CardPreviewModal`.
+- **Shared Side Drawer Component (`/src/components/CardListDrawer.tsx`)**:
+  - Extract the shared drawer backdrop, header, card list row item, action buttons, and `CardPreviewModal` integration into `CardListDrawer.tsx`, and refactor `HistoryDrawer.tsx` and `FavoritesDrawer.tsx` into lightweight wrappers configuring title, icon, empty state, and item actions.
+
+### Phase 3: Security & Memory Hardening
+- **Request Body Limit & Stream Guard**:
+  - Enforce a 32 KB byte cap in `parseJsonBody` inside `/src/server/apiHandlers.ts` (rejecting oversized streams with HTTP `413 Payload Too Large`) and in `express.json({ limit: '32kb' })` inside `server.ts`.
+- **Input Validation & Prompt Injection Hardening on `/api/cards/synergy`**:
+  - Sanitize and strip control characters/quotes from `card.name` (max 120 chars), `card.type` (max 60 chars), `card.race` (max 40 chars), `card.attribute` (max 20 chars), `card.archetype` (max 60 chars), and `card.desc` (max 280 chars).
+  - Cap `excludeNames` to at most 25 sanitized strings (max 120 chars each) before constructing the cache key or prompt.
+- **Per-IP Rate Limiting & Origin Check**:
+  - Add a bounded in-memory sliding-window rate limiter (e.g., 30 requests / minute per IP) and restrict CORS to same-origin or configured allowed origins in `handleCardSynergy`.
+- **Bounded Caches & Safe External URLs**:
+  - Bound `resolvedCardByNameCache` in `/src/services/ygoprodeckApi.ts` to 250 entries (LRU eviction).
+  - Ensure `sanitizeCardForStorage` in `historySlice.ts` and external `<a href>` links in `CardDisplay` validate `https://` / `http://` URLs.
+
+### Phase 4: Decompose `CardDisplay.tsx` into Focused Subcomponents
+- **`/src/hooks/useAnimatedStat.ts`**:
+  - Move `useAnimatedStat` out of the `CardDisplay` component body into its own dedicated hook file.
+- **`/src/components/card-display/CardCarousel3D.tsx`**:
+  - Encapsulate the 3D perspective carousel stage, swipe/wheel navigation hints, card-back flip overlay, and external image viewer link.
+- **`/src/components/card-display/CardStatsGrid.tsx`**:
+  - Encapsulate the interactive filterable stat pills (Type, Race, Attribute, Level/Rank/Link, ATK/DEF, Archetype) with active-filter badges and tooltips.
+- **`/src/components/card-display/CardSetsSection.tsx`**:
+  - Encapsulate the metadata/passcode/debut-year/banlist footer and expandable chronological Card Sets grid.
+- **`/src/components/CardDisplay.tsx`**:
+  - Retain the high-level card header, synergy/favorite/share toolbar, effect/lore text box, and orchestration of the new subcomponents.
 
 ---
 
-## 3. Key Product Decisions & Trade-Offs
-
-- **Shared Express + Vercel Handler Architecture**: Rather than maintaining duplicate logic between local Express development and Vercel Serverless Functions, a unified API router/handler module will power both `server.ts` and the Vercel `/api` entry point. This guarantees zero drift between environments.
-- **Production-Ready Gemini 3 Model Selection**:
-  - Primary model: `gemini-3.8-flash` configured with `ThinkingLevel.LOW` and structured JSON schema output (`responseMimeType: "application/json"`).
-  - Fast fallback model: `gemini-3.1-flash-lite` configured with `ThinkingLevel.MINIMAL` for sub-second recovery if the primary model is rate-limited or unavailable.
-  - Curated deterministic fallback: `buildFallbackSynergySuggestions` when no key is present or both models fail.
-- **Explicit API Rewrite Exclusion in Vercel Configuration**: Only non-API paths (`/((?!api/).*)`) will rewrite to `/index.html`, allowing `/api/cards/synergy`, `/api/cards/random`, `/api/cards/filters`, and `/api/resources` to hit the serverless backend directly.
-
----
-
-## 4. Technical Architecture & Data Strategy
-
-```
-+-------------------------------------------------------------------------+
-|                        React Client (Browser UI)                        |
-|   RelevantCardsSheet ("AI Suggested")  |  FilterBar / Random Card Draw  |
-+-------------------+------------------------------------+----------------+
-                    | POST /api/cards/synergy            | GET /api/cards/random
-                    |                                    | GET /api/cards/filters
-                    v                                    v GET /api/resources
-+-------------------------------------------------------------------------+
-|                     Platform Routing Layer                              |
-|  - Vercel: vercel.json routes /api/* -> Serverless Function Runtime     |
-|            and /((?!api/).*) -> /index.html                             |
-|  - Node / Container / Local: Express server.ts mounts /api/* directly   |
-+------------------------------------+------------------------------------+
-                                     |
-                                     v
-+-------------------------------------------------------------------------+
-|                  Unified Backend API Controller                         |
-|  - In-Memory YGOPRODeck Card & Pricing Cache (1-Hour TTL)               |
-|  - /api/cards/random   (Filtered draw + weighted pool selection)        |
-|  - /api/cards/filters  (Archetypes, Races, Sets, Banlist catalogs)      |
-|  - /api/resources      (Curated TCG tools & deckbuilder directory)      |
-|  - /api/cards/synergy  (AI Tactical Synergy Engine)                     |
-+-----------------+--------------------------------------+----------------+
-                  |                                      |
-                  v (If GEMINI_API_KEY set)              v (Missing key / timeout)
-+-----------------------------------+  +----------------------------------+
-|   @google/genai Server SDK        |  | Curated Tactical Synergy Engine  |
-| 1. gemini-3.8-flash (LOW thinking)|  | - Attribute / Race / Type match  |
-| 2. gemini-3.1-flash-lite (MINIMAL)|  | - Competitive Hand Traps & Staples|
-+-----------------+-----------------+  +-----------------+----------------+
-                  |                                      |
-                  +------------------+-------------------+
-                                     |
-                                     v
-               Resolved YuGiOhCard[] + Synergy Reason & Category
-```
-
-### Environment Variables Checklist for External Hosting (Vercel / Render / Railway / Cloud Run)
-| Variable Name | Scope | Purpose |
-| :--- | :--- | :--- |
-| `GEMINI_API_KEY` | Server-side only | Authenticates `@google/genai` requests in `/api/cards/synergy`. Never exposed with `VITE_` prefix to the browser. |
+## 3. Verification Criteria
+- `compile_applet` and `lint_applet` pass with zero TypeScript or ESLint errors.
+- Random card drawing (both main Draw button and Navbar Quick Draw), filter pill toggling, 3D history carousel navigation, History/Favorites drawers, Matching Cards sheet, and Gemini AI Synergy recommendations all work seamlessly.
